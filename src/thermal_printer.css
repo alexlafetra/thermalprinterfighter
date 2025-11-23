@@ -1,14 +1,14 @@
  @font-face{
     font-family:receipt_wide;
-    src : url('merchant-copy-font/MerchantCopyWide.ttf');
+    src : url('/MerchantCopyWide.ttf');
 }
 @font-face{
     font-family:receipt_doublesize;
-    src : url('merchant-copy-font/MerchantCopyDoublesize.ttf');
+    src : url('/MerchantCopyDoublesize.ttf');
 }
 @font-face{
     font-family:receipt;
-    src : url('merchant-copy-font/MerchantCopy.ttf');
+    src : url('/MerchantCopy.ttf');
 }
 html{
     image-rendering: pixelated;
