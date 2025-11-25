@@ -23,7 +23,7 @@ input{
     grid-template-areas:"title title title buffer"
                         "title title title preview"
                         "blank1 buttons blank2 preview";
-    grid-template-columns: 50px 350px 50px 600px;
+    grid-template-columns: 50px 390px 80px 600px;
     grid-template-rows: 10px 220px auto;
     width:1000px;
     height:100vh;
@@ -110,7 +110,6 @@ select:hover{
 }
 #preview_holder{
     grid-area:preview;
-    height:fit-content;
     height:100%;
     width:100%;
     overflow-y: scroll;
@@ -118,9 +117,9 @@ select:hover{
     margin:none;
     padding:none;
 }
+/* flex container */
 #preview{
-    height:fit-content;
-    /* min-height:80%; */
+    display:flex;
     background-color: rgb(247, 247, 240);
     width:576px;
     font-size:34px;
@@ -129,18 +128,22 @@ select:hover{
     margin:none;
     margin-top:20px;
     padding:none;
-    /* display:block; */
-    display:flex;
     border-radius: 12px;
-    /* flex-direction: column; */
     font-family:receipt;
-    /* white-space: pre; */
     overflow-wrap: anywhere;
-    /* justify-content: right; */
+    flex-direction: column;
+    align-items: flex-start;
+    white-space-collapse: preserve-breaks;
 }
 
-.image_preview{
-    display:flex;
+#preview img{
+    flex: 0 0 auto; /* do not grow or shrink */
+    width: auto;    /* ensures no forced scaling */
+    height: auto;   /* keeps original height */
+}
+
+#preview img:hover{
+    filter:brightness(0.7);
 }
 
 textarea {

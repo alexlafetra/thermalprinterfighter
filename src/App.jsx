@@ -312,6 +312,9 @@ function App() {
       newImg.copy(img, 0, 0, img.width, img.height, 0, 0, img.width, img.height);
       img = newImg.get();
     }
+    //dither image in place
+    ditherImage(img);
+
     //if the image is taller than 1728px, you need to break it into chunks (not sure why, limitation of ESC-POS?)
     const maxHeight = 1720;
     if (img.height > maxHeight) {
@@ -319,13 +322,19 @@ function App() {
       for (let subset = 0; subset < img.height; subset += maxHeight) {
         subImages.push(img.get(0, subset, img.width, Math.min(maxHeight, img.height - subset)));
       }
-      for (img of subImages) {
-        ditherImage(img);
+      for (let subImg of subImages) {
+        // ditherImage(img);
+        console.log(subImg);
+        let newImage = document.createElement("img");
+        newImage.src = subImg.canvas.toDataURL();
+        document.getElementById("preview").appendChild(newImage);
       }
       return;
     }
     else {
-      ditherImage(img);
+      let newImage = document.createElement("img");
+      newImage.src = img.canvas.toDataURL();
+      document.getElementById("preview").appendChild(newImage);
     }
   }
   function getDitherAlgorithm(algorithm) {
@@ -358,22 +367,15 @@ function App() {
       img.pixels[p + 3] = 255;
     }
     img.updatePixels();
-    let newHolder = document.createElement("div");
-    newHolder.style = {
-      // display:'flex',
-      // flexDirection:'column',
-      width:'100%',
-      justifyContent:textFormatSettingsRef.current.align
-    };
-    let newImage = document.createElement("img");
-    newImage.src = img.canvas.toDataURL();
-    newImage.className = "image_preview";
-    newImage.style = {
-      width:`${newImage.width}px`,
-    };
-    let previewDiv = document.getElementById("preview");
-    newHolder.appendChild(newImage);
-    previewDiv.appendChild(newHolder);
+  
+    // return img;
+
+    // let newImage = document.createElement("img");
+
+    // newImage.src = img.canvas.toDataURL();
+
+    // let previewDiv = document.getElementById("preview");
+    // previewDiv.appendChild(newImage);
   }
   function clearImages(){
     const preview = document.getElementById("preview");
@@ -393,7 +395,7 @@ function App() {
     // width:'fit-content',
     fontStyle : textFormatSettings.italic?'italic':'normal',
     fontWeight : textFormatSettings.bold?'bold':'normal',
-    fontSize : textFormatSettings.font == 'A'?'34px':'24px'
+    fontSize : textFormatSettings.font == 'A'?'34px':'24px',
   };
 
   return (
@@ -402,7 +404,8 @@ function App() {
         {connectedToPrinter &&
         <p style = {{margin:'auto',width:'576px'}}>*--------------------------------------------- preview ---------------------------------------------*</p>
         }
-        <div id="preview" style = {{display:'flex',flexDirection:'column',justifyContent:textFormatSettings.align}}>
+        
+        <div id="preview" style = {{alignItems:textFormatSettings.align}}>
           {previewText &&
           <p style = {previewTextStyle}>{previewText}</p>
           }
@@ -483,9 +486,9 @@ function App() {
             <div style = {{display:'flex',alignItems:'center'}}>
               <p>{"align: "}</p>
               <select name="align type" className = "control_dropdown" onInput={(e) => setTextFormatSettings({...textFormatSettingsRef.current,align:e.target.value})}>
-                <option className = "control_dropdown" value="left">left</option>
+                <option className = "control_dropdown" value="flex-start">left</option>
                 <option className = "control_dropdown" value="center">center</option>
-                <option className = "control_dropdown" value="right">right</option>
+                <option className = "control_dropdown" value="flex-end">right</option>
               </select>
               <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.upsideDown?'rgba(0, 162, 255, 1)':'rgb(247, 247, 240)'}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,upsideDown:!textFormatSettingsRef.current.upsideDown})}} value="upside down" />
               <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.rotate90?'rgba(0, 162, 255, 1)':'rgb(247, 247, 240)'}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,rotate90:!textFormatSettingsRef.current.rotate90})}} value="rotate 90º" />
