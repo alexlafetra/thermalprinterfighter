@@ -114,12 +114,12 @@ function App() {
       // p.createCanvas(350, 540, p.WEBGL);
       p.angleMode(p.DEGREES);
       p.ortho();
-      p.pixelDensity(0.5);
       // p.pixelDensity(1);
       p.frameRate(8);
     }
 
     p.draw = () => {
+      p.pixelDensity((1.0 + Math.sin(p.frameCount/20))/2.0);
       p.translate(0, 80, 0);
       p.rotateX(80);
       // p.rotateZ(140);
@@ -358,6 +358,13 @@ function App() {
       img.pixels[p + 3] = 255;
     }
     img.updatePixels();
+    let newHolder = document.createElement("div");
+    newHolder.style = {
+      // display:'flex',
+      // flexDirection:'column',
+      width:'100%',
+      justifyContent:textFormatSettingsRef.current.align
+    };
     let newImage = document.createElement("img");
     newImage.src = img.canvas.toDataURL();
     newImage.className = "image_preview";
@@ -365,7 +372,8 @@ function App() {
       width:`${newImage.width}px`,
     };
     let previewDiv = document.getElementById("preview");
-    previewDiv.appendChild(newImage);
+    newHolder.appendChild(newImage);
+    previewDiv.appendChild(newHolder);
   }
   function clearImages(){
     const preview = document.getElementById("preview");
@@ -394,7 +402,7 @@ function App() {
         {connectedToPrinter &&
         <p style = {{margin:'auto',width:'576px'}}>*--------------------------------------------- preview ---------------------------------------------*</p>
         }
-        <div id="preview" style = {{justifyContent:textFormatSettings.align}}>
+        <div id="preview" style = {{display:'flex',flexDirection:'column',justifyContent:textFormatSettings.align}}>
           {previewText &&
           <p style = {previewTextStyle}>{previewText}</p>
           }
@@ -404,7 +412,8 @@ function App() {
         <main id="p5canvas"></main>
         <div id="button_holder" className="button">
           <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:connectedToPrinter?"#4dff00ff":"#004e11ff",color:connectedToPrinter?"#000000ff":"#ffffffff"}} onClick={() => receiptPrinterRef.current.connect()} value={connectedToPrinter?"connected!":"connect to printer"} />
-          <div style = {{display:connectedToPrinter?'grid':'none'}}>
+          {/*<div style = {{display:connectedToPrinter?'grid':'none'}}>*/}
+          <div>
             <div style = {{display:'flex',alignItems:'center',flexDirection:'row'}}>
               <p className = "control_header">{"*--- esc commands ---*"}</p>
               <textarea style = {{marginLeft:'20px',padding:'none',width:'100px',height:'25px',color:'white',backgroundColor:'black',alignContent:'center'}} onInput={(e) => {customCommandText.current = e.target.value}}></textarea>
