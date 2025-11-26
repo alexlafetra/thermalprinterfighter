@@ -14,7 +14,14 @@ function App() {
   //Receipt encoder instance
   const encoderRef = useRef();
   //Image selected by user
-  const currentlyRenderedImage = useRef();
+  const [currentlyRenderedImage,setCurrentlyRenderedImage] = useState(undefined);
+  const currentlyRenderedImageRef = useRef(currentlyRenderedImage);
+  useEffect(() => {
+    currentlyRenderedImageRef.current = currentlyRenderedImage;
+    if (currentlyRenderedImageRef.current)
+      processImage(currentlyRenderedImageRef.current);
+  },[currentlyRenderedImage]);
+
   //p5 instance
   const p5Ref = useRef();
 
@@ -41,8 +48,8 @@ function App() {
   //whenever the dither settings update, reprocess the image
   useEffect(() => {
     imageRenderSettingsRef.current = imageRenderSettings;
-    if (currentlyRenderedImage.current)
-      processImage(currentlyRenderedImage.current);
+    if (currentlyRenderedImageRef.current)
+      processImage(currentlyRenderedImageRef.current);
   }, [imageRenderSettings]);
 
   const [textFormatSettings,setTextFormatSettings] = useState({
@@ -195,8 +202,9 @@ function App() {
     const blobURL = URL.createObjectURL(file);
     p5Ref.current.loadImage(blobURL, (img) => {
       //deep copy the image, in case we want to tweak the rendering algorithm
-      currentlyRenderedImage.current = img
-      processImage(currentlyRenderedImage.current);
+      // currentlyRenderedImageRef.current = img
+      setCurrentlyRenderedImage(img);
+      // processImage(currentlyRenderedImageRef.current);
     });
   }
 
@@ -349,6 +357,7 @@ function App() {
         return floyd;
     }
   }
+  //dithers an image in place (just modifies the pixels[] buffer)
   function ditherImage(img) {
     img.loadPixels();
     const pixels = [];
@@ -357,8 +366,15 @@ function App() {
       const val = (255.0 - img.pixels[byte + 3]) + (img.pixels[byte + 3] / 255.0) * ((img.pixels[byte] + img.pixels[byte + 1] + img.pixels[byte + 2]) / 3.0);
       pixels.push(val / 255.0);
     }
+    const ditherAlgorithms = {
+      threshold : threshold,
+      bayer : bayer,
+      atkinson : atkinson,
+      floyd : floyd
+    };
+    const ditherAlgorithm = ditherAlgorithms[imageRenderSettingsRef.current.algorithm];
     //load dithered pixels back into the image
-    const ditherAlgorithm = getDitherAlgorithm(imageRenderSettingsRef.current.algorithm);
+    // const ditherAlgorithm = getDitherAlgorithm(imageRenderSettingsRef.current.algorithm);
     const newPixels = ditherAlgorithm(pixels, img.width, imageRenderSettingsRef.current.threshold);
     for (let p = 0; p < img.pixels.length; p += 4) {
       img.pixels[p] = newPixels[p / 4];
@@ -367,15 +383,6 @@ function App() {
       img.pixels[p + 3] = 255;
     }
     img.updatePixels();
-  
-    // return img;
-
-    // let newImage = document.createElement("img");
-
-    // newImage.src = img.canvas.toDataURL();
-
-    // let previewDiv = document.getElementById("preview");
-    // previewDiv.appendChild(newImage);
   }
   function clearImages(){
     const preview = document.getElementById("preview");
@@ -384,6 +391,7 @@ function App() {
         node.remove();
       }
     }
+    setCurrentlyRenderedImage(undefined);
   }
 
   const previewTextStyle = {
@@ -423,10 +431,20 @@ function App() {
               <input className = "control_button" style = {{width:'fit-content',height:'30px'}} type="button" onClick={() => sendCustomCommand()} value="send raw command" />
             </div>
             <div style = {{display:'flex'}}>
-              <input className = "control_button" type="button" onClick={() => advancePaper()} value="advance paper" />
-              <input className = "control_button" type="button" onClick={() => cutPaper()} value="cut paper" />
-              <input className = "control_button" style = {{backgroundColor:"#ff0000ff",borderRadius:'10px'}} id="print_button" type="button" onClick={() => sendPreviewDataToPrinter()} value="send data to printer & print" />
-              <input className = "control_button" style = {{backgroundColor:"#d4ff00ff",borderRadius:'10px'}} type="button" onClick={() => {clearImages();setPreviewText('');}} value="clear preview" />
+              <input className = "control_button image_button" style = {{backgroundImage:'url(paper_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center'}} type="button" onClick={() => advancePaper()} value="advance paper" />
+              <input className = "control_button image_button" style = {{backgroundImage:'url(scissor_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center'}} type="button" onClick={() => cutPaper()} value="cut receipt" />
+              <input className = "control_button image_button" style = {{backgroundImage:'url(printer_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center', backgroundColor:"#ff0000ff",borderRadius:'10px'}} id="print_button" type="button" onClick={() => sendPreviewDataToPrinter()} value="send data to printer & print" />
+              <input className = "control_button image_button" style = {{backgroundImage:'url(cancel_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center', backgroundColor:"#d4ff00ff",borderRadius:'10px'}} type="button" onClick={() => {clearImages();setPreviewText('');}} value="clear preview" />
+              {currentlyRenderedImage &&
+              <input className = "control_button" style = {{borderRadius:'10px'}}type="button" onClick={() => {
+                const link = document.createElement('a');
+                link.href = currentlyRenderedImageRef.current.canvas.toDataURL('image/png');
+                link.download = 'ditheredImage.png';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }} value="save" />
+              }
             </div>
             
             <p className = "control_header">{"*--- text ---*"}</p>

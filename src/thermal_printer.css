@@ -71,6 +71,13 @@ input{
 .control_button:hover{
     background-color:blue;
 }
+.image_button{
+    color:transparent;
+}
+.image_button:hover{
+    color:white;
+}
+
 select{
     font-family:receipt_wide;
     text-align:center;
@@ -146,6 +153,8 @@ select:hover{
     filter:brightness(0.7);
 }
 
+
 textarea {
     resize: none;
+    /* background-repeat: ; */
 }
