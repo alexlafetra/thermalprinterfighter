@@ -60,8 +60,9 @@ input{
     margin-bottom:10px;
 }
 .control_button{
-    min-width:50px;
-    height:50px;
+    padding:10px;
+    /* min-width:50px; */
+    /* height:50px; */
     border:black 1px solid;
     margin:2px;
     cursor:pointer;
@@ -70,6 +71,7 @@ input{
 }
 .control_button:hover{
     background-color:blue;
+    color:white;
 }
 .image_button{
     color:transparent;
@@ -115,10 +117,17 @@ select:hover{
 #file-input {
     display: none;
 }
+.upload_image_preview{
+    border:1px solid transparent;
+}
+.upload_image_preview:hover{
+    border:1px solid blue;
+}
 #preview_holder{
     grid-area:preview;
     height:100%;
     width:100%;
+    overflow:visible;
     overflow-y: scroll;
     border:none;
     margin:none;
@@ -127,20 +136,22 @@ select:hover{
 /* flex container */
 #preview{
     display:flex;
-    background-color: rgb(247, 247, 240);
+    background-color: rgb(255, 255, 255);
     width:576px;
     font-size:34px;
+    min-height:80%;
     border:none;
     box-shadow: 10px 5px 10px rgb(40, 48, 0);;
     margin:none;
-    margin-top:20px;
+    margin-top:10%;
     padding:none;
-    border-radius: 12px;
+    border-radius: 1px;
     font-family:receipt;
-    overflow-wrap: anywhere;
+    overflow:visible;
     flex-direction: column;
     align-items: flex-start;
     white-space-collapse: preserve-breaks;
+    color:rgb(56, 56, 56);
 }
 
 #preview img{
@@ -153,6 +164,19 @@ select:hover{
     filter:brightness(0.7);
 }
 
+.preview_row .cancel_button{
+    visibility:hidden;
+}
+.preview_row:hover .cancel_button{
+    visibility:visible;
+}
+.preview_item{
+    border:1px solid transparent;
+}
+.preview_row:hover .preview_item{
+    border:1px solid blue;
+    cursor:pointer;
+}
 
 textarea {
     resize: none;

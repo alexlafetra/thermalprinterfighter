@@ -14,12 +14,11 @@ function App() {
   //Receipt encoder instance
   const encoderRef = useRef();
   //Image selected by user
-  const [currentlyRenderedImage,setCurrentlyRenderedImage] = useState(undefined);
+  const [currentlyRenderedImage,setCurrentlyRenderedImage] = useState(null);
+  const [currentImageDataURL,setCurrentImageDataURL] = useState(null);
   const currentlyRenderedImageRef = useRef(currentlyRenderedImage);
   useEffect(() => {
     currentlyRenderedImageRef.current = currentlyRenderedImage;
-    if (currentlyRenderedImageRef.current)
-      processImage(currentlyRenderedImageRef.current);
   },[currentlyRenderedImage]);
 
   //p5 instance
@@ -33,11 +32,11 @@ function App() {
     connectedToPrinterRef.current = connectedToPrinter;
   }, [connectedToPrinter]);
 
-  const [previewText,setPreviewText] = useState(undefined);
-  const previewTextRef = useRef(previewText);
+  const [currentText,setCurrentText] = useState('');
+  const currentTextRef = useRef(currentText);
   useEffect(() => {
-    previewTextRef.current = previewText;
-  }, [previewText]);
+    currentTextRef.current = currentText;
+  }, [currentText]);
 
   const [imageRenderSettings, setImageRenderSettings] = useState({
     algorithm: 'atkinson',
@@ -48,12 +47,10 @@ function App() {
   //whenever the dither settings update, reprocess the image
   useEffect(() => {
     imageRenderSettingsRef.current = imageRenderSettings;
-    if (currentlyRenderedImageRef.current)
-      processImage(currentlyRenderedImageRef.current);
   }, [imageRenderSettings]);
 
   const [textFormatSettings,setTextFormatSettings] = useState({
-    align : 'left',//right, left, center
+    align : 'flex-start',//right, left, center
     underline : false,
     bold: false,
     italic: false,
@@ -71,6 +68,40 @@ function App() {
     textFormatSettingsRef.current = textFormatSettings;
   }, [textFormatSettings]);
 
+  const [mostRecentlyEdited,setMostRecentlyEdited] = useState('text');
+
+  const ReceiptImage = function(image,imageSettings,textSettings){
+    return ({
+      type:'image',
+      image:image,//p5 image
+      urls:convertImageToDataURLs(image,imageSettings),//converted image
+      imageRenderSettings:{...imageSettings},
+      textFormatSettings:{...textSettings}
+    });
+  }
+  const ReceiptText = function(string,textSettings){
+    return({
+      type:'text',
+      text:string,
+      textFormatSettings:{...textSettings}
+    });
+  }
+
+  const ReceiptCanvas = function(){
+    return({
+      items:[ReceiptText('hello printer',textFormatSettings)],//holds canvas elements/text nodes
+    });
+  }
+  const [receiptCanvases,setReceiptCanvases] = useState([ReceiptCanvas()]);
+  const receiptCanvasesRef = useRef(receiptCanvases);
+  useEffect(() => {
+    receiptCanvasesRef.current = receiptCanvases;
+  }, [receiptCanvases]);
+  const [currentCanvas,setCurrentCanvas] = useState(0);
+  const currentCanvasRef = useRef(currentCanvas);
+  useEffect(() => {
+    currentCanvasRef.current = currentCanvas;
+  }, [currentCanvas]);
   //initialize
   useEffect(() => {
     receiptPrinterRef.current = new WebUSBReceiptPrinter();
@@ -201,10 +232,9 @@ function App() {
   function uploadImage(file){
     const blobURL = URL.createObjectURL(file);
     p5Ref.current.loadImage(blobURL, (img) => {
-      //deep copy the image, in case we want to tweak the rendering algorithm
-      // currentlyRenderedImageRef.current = img
       setCurrentlyRenderedImage(img);
-      // processImage(currentlyRenderedImageRef.current);
+      setCurrentImageDataURL(img.canvas.toDataURL());
+      setMostRecentlyEdited('image');
     });
   }
 
@@ -302,15 +332,14 @@ function App() {
     }
     return out;
   }
-  function processImage(srcImg) {
-    //erases previous images from preview
-    document.getElementById("preview").replaceChildren();
+  
+  function convertImageToDataURLs(srcImg,renderSettings) {
 
     //create a copy of this image, to mess with
     let img = srcImg.get();
 
     //resample image if it's greater than 576
-    const maxWidth = 576 * imageRenderSettingsRef.current.scale;
+    const maxWidth = 576 * renderSettings.scale;
     if (img.width > maxWidth) {
       img.resize(maxWidth, 0);
     }
@@ -321,7 +350,7 @@ function App() {
       img = newImg.get();
     }
     //dither image in place
-    ditherImage(img);
+    ditherImage(img,renderSettings);
 
     //if the image is taller than 1728px, you need to break it into chunks (not sure why, limitation of ESC-POS?)
     const maxHeight = 1720;
@@ -330,19 +359,14 @@ function App() {
       for (let subset = 0; subset < img.height; subset += maxHeight) {
         subImages.push(img.get(0, subset, img.width, Math.min(maxHeight, img.height - subset)));
       }
+      const finalImages = [];
       for (let subImg of subImages) {
-        // ditherImage(img);
-        console.log(subImg);
-        let newImage = document.createElement("img");
-        newImage.src = subImg.canvas.toDataURL();
-        document.getElementById("preview").appendChild(newImage);
+        finalImages.push(subImg.canvas.toDataURL());
       }
-      return;
+      return finalImages;
     }
     else {
-      let newImage = document.createElement("img");
-      newImage.src = img.canvas.toDataURL();
-      document.getElementById("preview").appendChild(newImage);
+      return [img.canvas.toDataURL()];
     }
   }
   function getDitherAlgorithm(algorithm) {
@@ -358,7 +382,7 @@ function App() {
     }
   }
   //dithers an image in place (just modifies the pixels[] buffer)
-  function ditherImage(img) {
+  function ditherImage(img,renderSettings) {
     img.loadPixels();
     const pixels = [];
     // convert color to BW
@@ -372,10 +396,10 @@ function App() {
       atkinson : atkinson,
       floyd : floyd
     };
-    const ditherAlgorithm = ditherAlgorithms[imageRenderSettingsRef.current.algorithm];
+    const ditherAlgorithm = ditherAlgorithms[renderSettings.algorithm];
     //load dithered pixels back into the image
     // const ditherAlgorithm = getDitherAlgorithm(imageRenderSettingsRef.current.algorithm);
-    const newPixels = ditherAlgorithm(pixels, img.width, imageRenderSettingsRef.current.threshold);
+    const newPixels = ditherAlgorithm(pixels, img.width, renderSettings.threshold);
     for (let p = 0; p < img.pixels.length; p += 4) {
       img.pixels[p] = newPixels[p / 4];
       img.pixels[p + 1] = newPixels[p / 4];
@@ -384,6 +408,7 @@ function App() {
     }
     img.updatePixels();
   }
+
   function clearImages(){
     const preview = document.getElementById("preview");
     for(let node of preview.children){
@@ -391,20 +416,58 @@ function App() {
         node.remove();
       }
     }
-    setCurrentlyRenderedImage(undefined);
+    setCurrentlyRenderedImage(null);
+    setCurrentImageDataURL(null);
   }
 
-  const previewTextStyle = {
-    textAlign:textFormatSettings.align,
-    transform: `scale(${textFormatSettings.width},${textFormatSettings.height})`,
-    transformOrigin: textFormatSettings.align,
-    color:textFormatSettings.invert?'white':'black',
-    backgroundColor:textFormatSettings.invert?'black':'transparent',
-    // width:'fit-content',
-    fontStyle : textFormatSettings.italic?'italic':'normal',
-    fontWeight : textFormatSettings.bold?'bold':'normal',
-    fontSize : textFormatSettings.font == 'A'?'34px':'24px',
-  };
+  function removePreviewItem(index){
+    const receipt = receiptCanvasesRef.current[currentCanvasRef.current];
+    receipt.items = receipt.items.filter((item,i) => {return (i !== index)});
+    setReceiptCanvases([...receiptCanvasesRef.current]);
+  }
+
+  const CurrentText = function(){
+    const transformOriginStyle = (textFormatSettings.align == 'flex-start')?'top left':((textFormatSettings.align == 'flex-end')?'top right':'center');
+    const textStyle = {
+      textAlign:textFormatSettings.align,
+      transform: `scale(${textFormatSettings.width},${textFormatSettings.height})`,
+      transformOrigin:transformOriginStyle,
+      color:textFormatSettings.invert?'white':'black',
+      backgroundColor:textFormatSettings.invert?'black':'transparent',
+      width:'fit-content',
+      fontStyle : textFormatSettings.italic?'italic':'normal',
+      fontWeight : textFormatSettings.bold?'bold':'normal',
+      fontSize : textFormatSettings.font == 'A'?'34px':'24px',
+    };
+    return(
+        <div key = {`preview_text_current`} className = "receipt_text preview_item" style = {textStyle}>
+          {currentText}
+        </div>);
+  }
+
+  const CurrentImage = function(){
+    const maxWidth = 576 * imageRenderSettings.scale;
+    const dims = {
+      width:currentlyRenderedImage.width*imageRenderSettings.scale,
+      height:currentlyRenderedImage.height*imageRenderSettings.scale,
+    };
+    const aspectRatio = dims.height/dims.width;
+    if (dims.width > maxWidth) {
+      dims.width = maxWidth;
+      dims.height = maxWidth*aspectRatio;
+    }
+    const previewImageStyle = {
+      width:dims.width,
+      height:dims.height,
+      position:'relative',
+    };
+    const urls = convertImageToDataURLs(currentlyRenderedImage,imageRenderSettings);
+    return(<div className = 'image_holder' style = {{display:'flex',width:'fit-content',height:'fit-content',flexDirection:'column'}}>
+      {urls.map((url,index) => {
+      return <img style = {previewImageStyle} key = {`preview_image_current_${index}`} src = {url}></img>
+      })}
+    </div>);
+  }
 
   return (
     <div id="gui">
@@ -413,10 +476,118 @@ function App() {
         <p style = {{margin:'auto',width:'576px'}}>*--------------------------------------------- preview ---------------------------------------------*</p>
         }
         
-        <div id="preview" style = {{alignItems:textFormatSettings.align}}>
-          {previewText &&
-          <p style = {previewTextStyle}>{previewText}</p>
-          }
+        <div id="preview">
+          {receiptCanvases[currentCanvas].items.map((item,index) => {
+            const previewRowStyle = {
+              width:'100%',
+              height:'fit-content',
+              display:'flex',
+              // position:'relative',
+              justifyContent:item.textFormatSettings.align,
+              // overflowX:'clip'
+            };
+            if(item.type == 'text'){
+              const deleteButtonStyle = {
+                width:'20px',
+                height:'20px',
+                borderRadius:'10px',
+                color:'black',
+                backgroundColor:'red',
+                marginLeft:'4px',
+                fontFamily:'monospace',
+                fontSize:'20px',
+                display:'flex',
+                alignItems:'center',
+                justifyContent:'center',
+                cursor:'pointer',
+                fontWeight:'bold',
+                position:'absolute',
+                right:'-25px',
+                top:'0px'
+              }
+              const transformOriginStyle = (item.textFormatSettings.align == 'flex-start')?'top left':((item.textFormatSettings.align == 'flex-end')?'top right':'center');
+              const textStyle = {
+                textAlign:item.textFormatSettings.align,
+                transform: `scale(${item.textFormatSettings.width},${item.textFormatSettings.height})`,
+                transformOrigin:transformOriginStyle,
+                color:item.textFormatSettings.invert?'white':'black',
+                backgroundColor:item.textFormatSettings.invert?'black':'transparent',
+                width:'fit-content',
+                fontStyle : item.textFormatSettings.italic?'italic':'normal',
+                fontWeight : item.textFormatSettings.bold?'bold':'normal',
+                fontSize : item.textFormatSettings.font == 'A'?'34px':'24px',
+                position:'relative',
+              };
+              return (
+              <div key = {`preview_row_${index}`} className = 'preview_row' style = {previewRowStyle}>
+                <div key = {`preview_item_${index}`} className = "receipt_text preview_item" style = {textStyle}>
+                  {item.text}
+                  <div key = {`preview_item_delete_button_${index}`} className = 'cancel_button' style = {deleteButtonStyle} onClick = {() => {removePreviewItem(index)}}>x</div>
+                </div>
+              </div>);
+            }
+            else if(item.type == 'image'){
+              const deleteButtonStyle = {
+                width:'20px',
+                height:'20px',
+                borderRadius:'10px',
+                color:'black',
+                backgroundColor:'red',
+                marginLeft:'4px',
+                fontFamily:'monospace',
+                fontSize:'20px',
+                display:'flex',
+                alignItems:'center',
+                justifyContent:'center',
+                cursor:'pointer',
+                fontWeight:'bold',
+                position:'absolute',
+                right:'5px',
+                top:'5px'
+              }
+              const maxWidth = 576 * item.imageRenderSettings.scale;
+              const dims = {
+                width:item.image.width*item.imageRenderSettings.scale,
+                height:item.image.height*item.imageRenderSettings.scale,
+              };
+              const aspectRatio = dims.height/dims.width;
+              if (dims.width > maxWidth) {
+                dims.width = maxWidth;
+                dims.height = maxWidth*aspectRatio;
+              }
+              const previewImageStyle = {
+                width:dims.width,
+                height:dims.height,
+                position:'relative',
+              };
+              const urls = item.urls;
+              //if it's an array of images (for a tall image)
+              return(
+                <div key = {`preview_row_${index}`} className = 'preview_row' style = {previewRowStyle}>
+                    <div className = 'image_holder' style = {{position:'relative',display:'flex',width:'fit-content',height:'fit-content',flexDirection:'column'}}>
+                      {urls.map((url,index) => {
+                        return <img style = {previewImageStyle} key = {`preview_image_${index}`} src = {url}></img>
+                      })}
+                      <div key = {`preview_item_delete_button_${index}`} className = 'cancel_button' style = {deleteButtonStyle} onClick = {() => {removePreviewItem(index)}}>x</div>
+                    </div>
+                </div>
+              );
+            }
+          })}
+          <div className = 'preview_row'
+            style = {{
+              width:'100%',
+              height:'fit-content',
+              display:'flex',
+              justifyContent:textFormatSettings.align,
+            }}>
+            {mostRecentlyEdited == 'text' && currentText &&
+              <CurrentText></CurrentText>
+            }
+            {mostRecentlyEdited == 'image' && currentlyRenderedImage &&
+              <CurrentImage></CurrentImage>
+            }
+          </div>
         </div>
       </div>
       <div id="title">esc-pos thermal printer fighter</div>
@@ -434,7 +605,7 @@ function App() {
               <input className = "control_button image_button" style = {{backgroundImage:'url(paper_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center'}} type="button" onClick={() => advancePaper()} value="advance paper" />
               <input className = "control_button image_button" style = {{backgroundImage:'url(scissor_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center'}} type="button" onClick={() => cutPaper()} value="cut receipt" />
               <input className = "control_button image_button" style = {{backgroundImage:'url(printer_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center', backgroundColor:"#ff0000ff",borderRadius:'10px'}} id="print_button" type="button" onClick={() => sendPreviewDataToPrinter()} value="send data to printer & print" />
-              <input className = "control_button image_button" style = {{backgroundImage:'url(cancel_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center', backgroundColor:"#d4ff00ff",borderRadius:'10px'}} type="button" onClick={() => {clearImages();setPreviewText('');}} value="clear preview" />
+              <input className = "control_button image_button" style = {{backgroundImage:'url(cancel_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center', backgroundColor:"#d4ff00ff",borderRadius:'10px'}} type="button" onClick={() => {clearImages();setCurrentText('');}} value="clear preview" />
               {currentlyRenderedImage &&
               <input className = "control_button" style = {{borderRadius:'10px'}}type="button" onClick={() => {
                 const link = document.createElement('a');
@@ -448,7 +619,32 @@ function App() {
             </div>
             
             <p className = "control_header">{"*--- text ---*"}</p>
-            <textarea rows="4" cols="48" onInput={(e) => {clearImages();setPreviewText(e.target.value)}}></textarea>
+            {/* preview text */}
+            <textarea style ={{height:'fit-content'}} cols="48" onClick = {()=>setMostRecentlyEdited('text')} onKeyDown={(e) => {
+              if(e.key === 'Enter' && !e.shiftKey){
+                //load into receipt
+                receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptText(e.target.value,textFormatSettingsRef.current));
+                setReceiptCanvases([...receiptCanvasesRef.current]);
+                //make sure this doesn't add a newline to the textbox, too
+                e.stopPropagation();
+                e.preventDefault();
+                //clear preview text
+                setCurrentText('');
+              }
+            }} 
+            onInput = {(e) => {
+              setCurrentText(e.target.value);
+              setMostRecentlyEdited('text');
+            }}
+            value = {currentText}></textarea>
+            {/* save text to preview */}
+            {currentText &&
+              <input className = "control_button" type="button" onClick={() => {
+                receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptText(currentTextRef.current,textFormatSettingsRef.current));
+                setReceiptCanvases([...receiptCanvasesRef.current]);
+                setCurrentText('');
+              }} value="save text to receipt [ENTER]" />
+            }
             <div style = {{display:'flex', alignItems:'center'}}>
               {/* stacking the w,h sliders vertically */}
               <div style = {{display:'flex',flexDirection:'column',marginBottom:'0px',paddingBottom:'0px'}}>
@@ -496,36 +692,44 @@ function App() {
                   </select>
                 </div>
               </div>
-              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.bold?'rgba(0, 162, 255, 1)':'rgb(247, 247, 240)'}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,bold:!textFormatSettingsRef.current.bold})}} value="bold" />
-              <input className = "control_button" style = {{borderRadius:'20px',fontStyle:'italic',backgroundColor:textFormatSettings.italic?'rgba(255, 255, 0, 1)':'rgb(247, 247, 240)'}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,italic:!textFormatSettingsRef.current.italic})}} value="italic" />
+              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.bold?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,bold:!textFormatSettingsRef.current.bold})}} value="bold" />
+              <input className = "control_button" style = {{borderRadius:'20px',fontStyle:'italic',backgroundColor:textFormatSettings.italic?'rgba(255, 255, 0, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,italic:!textFormatSettingsRef.current.italic})}} value="italic" />
               <input className = "control_button" style = {{borderRadius:'20px',backgroundColor:textFormatSettings.invert?'black':'white',color:textFormatSettings.invert?'white':'black'}} id="print_button" type="button" onClick = {() => {setTextFormatSettings({...textFormatSettingsRef.current,invert:!textFormatSettingsRef.current.invert})}} value="invert" />
             </div>
             <p className = "control_header">{"*--- position ---*"}</p>
             <div style = {{display:'flex',alignItems:'center'}}>
               <p>{"align: "}</p>
-              <select name="align type" className = "control_dropdown" onInput={(e) => setTextFormatSettings({...textFormatSettingsRef.current,align:e.target.value})}>
-                <option className = "control_dropdown" value="flex-start">left</option>
-                <option className = "control_dropdown" value="center">center</option>
-                <option className = "control_dropdown" value="flex-end">right</option>
-              </select>
-              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.upsideDown?'rgba(0, 162, 255, 1)':'rgb(247, 247, 240)'}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,upsideDown:!textFormatSettingsRef.current.upsideDown})}} value="upside down" />
-              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.rotate90?'rgba(0, 162, 255, 1)':'rgb(247, 247, 240)'}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,rotate90:!textFormatSettingsRef.current.rotate90})}} value="rotate 90º" />
+              <div id = "align_buttons" style = {{display:'flex'}}>
+                <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.align == 'flex-start'?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,align:'flex-start'})}} value="left" />
+                <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.align == 'center'?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,align:'center'})}} value="center" />
+                <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.align == 'flex-end'?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,align:'flex-end'})}} value="right" />
+              </div>
+              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.upsideDown?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,upsideDown:!textFormatSettingsRef.current.upsideDown})}} value="upside down" />
+              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.rotate90?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,rotate90:!textFormatSettingsRef.current.rotate90})}} value="rotate 90º" />
             </div>
             <p className = "control_header">{"*--- image ---*"}</p>
-            <label id="drop-zone">
-              Drop images here, or click to upload.
-              <input type="file" id="file-input" multiple accept="image/*" onInput={(e) => uploadImage(e.target.files[0])} />
-            </label>
+            {currentImageDataURL &&
+            <>
+            <div style = {{display:'flex',width:'100%',justifyContent:'center',height:'fit-content',}}>
+              <img onClick = {()=>setMostRecentlyEdited('image')} className = "upload_image_preview" style = {{cursor:'pointer',maxWidth:'200px'}} src={currentImageDataURL}/>
+            </div>
+            {/* save image to preview */}
+            <input className = "control_button" type="button" onClick={() => {
+              receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptImage(currentlyRenderedImageRef.current,imageRenderSettingsRef.current,textFormatSettingsRef.current));
+              setReceiptCanvases([...receiptCanvasesRef.current]);
+              setCurrentlyRenderedImage(null);
+              setCurrentImageDataURL(null);
+            }} value="save image to receipt" />
             <div style = {{display:'flex',alignItems:'center'}}>
               <p>{"dither algorithm: "}</p>
-              <select name="dither type" className = "control_dropdown" onInput={(e) => setImageRenderSettings({...imageRenderSettingsRef.current,algorithm: e.target.value})}>
+              <select name="dither type" className = "control_dropdown" onInput={(e) => {setMostRecentlyEdited('image');setImageRenderSettings({...imageRenderSettingsRef.current,algorithm: e.target.value})}}>
                 <option className = "control_dropdown" value="atkinson">atkinson</option>
                 <option className = "control_dropdown" value="floyd">floyd</option>
                 <option className = "control_dropdown" value="bayer">bayer</option>
                 <option className = "control_dropdown" value="threshold">threshold</option>
               </select>
               <p>{"size: "}</p>
-              <select name="dither type" className = "control_dropdown" onInput={(e) => setImageRenderSettings({...imageRenderSettingsRef.current,scale : parseFloat(e.target.value)})}>
+              <select name="dither type" className = "control_dropdown" onInput={(e) => {setMostRecentlyEdited('image');setImageRenderSettings({...imageRenderSettingsRef.current,scale : parseFloat(e.target.value)})}}>
                 <option className = "control_dropdown" value="1.0">100%</option>
                 <option className = "control_dropdown" value="0.75">75%</option>
                 <option className = "control_dropdown" value="0.5">50%</option>
@@ -535,10 +739,16 @@ function App() {
             {imageRenderSettings.algorithm != 'bayer' &&
             <div style = {{display:'flex'}}>
               <p>{'Threshold:'}</p>
-              <input type="range" className = "control_slider" id="dither_threshold_slider" name="threshold" min="0" max="4.0" step="0.01" onInput={(e) => setImageRenderSettings({...imageRenderSettingsRef.current,threshold: 1.0 - parseFloat(e.target.value)})} />
+              <input type="range" className = "control_slider" id="dither_threshold_slider" name="threshold" min="0" max="4.0" step="0.01" onInput={(e) => {setMostRecentlyEdited('image');setImageRenderSettings({...imageRenderSettingsRef.current,threshold: 1.0 - parseFloat(e.target.value)})}} />
               <p>{Math.round((imageRenderSettings.threshold + Number.EPSILON) * 100) / 100}</p>
             </div>
             }
+            </>
+            }
+            <label id="drop-zone">
+              Drop images here, or click to upload.
+              <input type="file" id="file-input" multiple accept="image/*" onInput={(e) => uploadImage(e.target.files[0])} />
+            </label>
           </div>
         </div>
     </div>
