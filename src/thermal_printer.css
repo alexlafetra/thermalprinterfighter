@@ -160,9 +160,9 @@ select:hover{
     height: auto;   /* keeps original height */
 }
 
-#preview img:hover{
+/* #preview img:hover{
     filter:brightness(0.7);
-}
+} */
 
 .preview_row .cancel_button{
     visibility:hidden;

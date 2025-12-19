@@ -361,12 +361,12 @@ function App() {
       }
       const finalImages = [];
       for (let subImg of subImages) {
-        finalImages.push(subImg.canvas.toDataURL());
+        finalImages.push({url:subImg.canvas.toDataURL(),height:subImg.height});
       }
       return finalImages;
     }
     else {
-      return [img.canvas.toDataURL()];
+      return [{url:img.canvas.toDataURL(),height:img.height}];
     }
   }
   function getDitherAlgorithm(algorithm) {
@@ -463,8 +463,8 @@ function App() {
     };
     const urls = convertImageToDataURLs(currentlyRenderedImage,imageRenderSettings);
     return(<div className = 'image_holder' style = {{display:'flex',width:'fit-content',height:'fit-content',flexDirection:'column'}}>
-      {urls.map((url,index) => {
-      return <img style = {previewImageStyle} key = {`preview_image_current_${index}`} src = {url}></img>
+      {urls.map((img,index) => {
+      return <img style = {{...previewImageStyle,height:img.height}} key = {`preview_image_current_${index}`} src = {img.url}></img>
       })}
     </div>);
   }
@@ -545,6 +545,7 @@ function App() {
                 right:'5px',
                 top:'5px'
               }
+              const urls = item.urls;
               const maxWidth = 576 * item.imageRenderSettings.scale;
               const dims = {
                 width:item.image.width*item.imageRenderSettings.scale,
@@ -557,16 +558,14 @@ function App() {
               }
               const previewImageStyle = {
                 width:dims.width,
-                height:dims.height,
                 position:'relative',
               };
-              const urls = item.urls;
               //if it's an array of images (for a tall image)
               return(
                 <div key = {`preview_row_${index}`} className = 'preview_row' style = {previewRowStyle}>
-                    <div className = 'image_holder' style = {{position:'relative',display:'flex',width:'fit-content',height:'fit-content',flexDirection:'column'}}>
-                      {urls.map((url,index) => {
-                        return <img style = {previewImageStyle} key = {`preview_image_${index}`} src = {url}></img>
+                    <div className = 'image_holder preview_item' style = {{position:'relative',display:'flex',width:'fit-content',height:'fit-content',flexDirection:'column'}}>
+                      {urls.map((im,index) => {
+                        return <img style = {{...previewImageStyle,height:im.height}} key = {`preview_image_${index}`} src = {im.url}></img>
                       })}
                       <div key = {`preview_item_delete_button_${index}`} className = 'cancel_button' style = {deleteButtonStyle} onClick = {() => {removePreviewItem(index)}}>x</div>
                     </div>
