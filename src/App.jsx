@@ -617,9 +617,6 @@ function App() {
           <p className = "control_header">{"*------------------------------------------------------------------*"}</p>
         </div>
         <div id="preview_holder">
-        {connectedToPrinter &&
-        <p style = {{margin:'auto',width:'576px'}}>*--------------------------------------------- preview ---------------------------------------------*</p>
-        }        
         <div id="preview">
           {receiptCanvases[currentCanvas].items.map((item,index) => {
             const previewRowStyle = {
