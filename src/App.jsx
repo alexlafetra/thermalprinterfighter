@@ -41,7 +41,8 @@ function App() {
   const [imageRenderSettings, setImageRenderSettings] = useState({
     algorithm: 'atkinson',
     threshold: 0.5,
-    scale : 1.0 // size of the image
+    scale : 1.0, // size of the image
+    scaleToFillReceipt:false
   });
   const imageRenderSettingsRef = useRef(imageRenderSettings);
   //whenever the dither settings update, reprocess the image
@@ -339,10 +340,13 @@ function App() {
     let img = srcImg.get();
 
     //resample image if it's greater than 576
-    const maxWidth = 576 * renderSettings.scale;
-    if (img.width > maxWidth) {
-      img.resize(maxWidth, 0);
-    }
+    const maxWidth = 576 ;
+    // img.resize(Math.max(img.width*renderSettings.scale,1),0);
+    // if (img.width > maxWidth || renderSettings.scaleToFillReceipt) {
+    //   img.resize(maxWidth,0);
+    // }
+    img.resize(renderSettings.scaleToFillReceipt?maxWidth:renderSettings.scale*maxWidth,0);
+
     //if height isn't a multiple of 8, make a new image that is
     if (img.height % 8) {
       let newImg = p5Ref.current.createImage(img.width, img.height + (8 - img.height % 8));
@@ -352,8 +356,8 @@ function App() {
     //dither image in place
     ditherImage(img,renderSettings);
 
-    //if the image is taller than 1728px, you need to break it into chunks (not sure why, limitation of ESC-POS?)
     const maxHeight = 1720;
+    //if the image is taller than 1728px, you need to break it into chunks (not sure why, limitation of ESC-POS?)
     if (img.height > maxHeight) {
       const subImages = [];
       for (let subset = 0; subset < img.height; subset += maxHeight) {
@@ -361,24 +365,12 @@ function App() {
       }
       const finalImages = [];
       for (let subImg of subImages) {
-        finalImages.push({url:subImg.canvas.toDataURL(),height:subImg.height});
+        finalImages.push({url:subImg.canvas.toDataURL(),width:subImg.width,height:subImg.height});
       }
       return finalImages;
     }
     else {
-      return [{url:img.canvas.toDataURL(),height:img.height}];
-    }
-  }
-  function getDitherAlgorithm(algorithm) {
-    switch (algorithm) {
-      case 'threshold':
-        return threshold;
-      case 'bayer':
-        return bayer;
-      case 'atkinson':
-        return atkinson;
-      case 'floyd':
-        return floyd;
+      return [{url:img.canvas.toDataURL(),width:img.width,height:img.height}];
     }
   }
   //dithers an image in place (just modifies the pixels[] buffer)
@@ -398,8 +390,7 @@ function App() {
     };
     const ditherAlgorithm = ditherAlgorithms[renderSettings.algorithm];
     //load dithered pixels back into the image
-    // const ditherAlgorithm = getDitherAlgorithm(imageRenderSettingsRef.current.algorithm);
-    const newPixels = ditherAlgorithm(pixels, img.width, renderSettings.threshold);
+    const newPixels = ditherAlgorithm(pixels, img.width, 1.0 - renderSettings.threshold);
     for (let p = 0; p < img.pixels.length; p += 4) {
       img.pixels[p] = newPixels[p / 4];
       img.pixels[p + 1] = newPixels[p / 4];
@@ -409,15 +400,11 @@ function App() {
     img.updatePixels();
   }
 
-  function clearImages(){
-    const preview = document.getElementById("preview");
-    for(let node of preview.children){
-      if(node.nodeName === 'IMG'){
-        node.remove();
-      }
-    }
-    setCurrentlyRenderedImage(null);
-    setCurrentImageDataURL(null);
+  //clears the canvas
+  function clear(){
+    const receipt = receiptCanvasesRef.current[currentCanvasRef.current];
+    receipt.items = [];
+    setReceiptCanvases([...receiptCanvasesRef.current]);
   }
 
   function removePreviewItem(index){
@@ -427,7 +414,7 @@ function App() {
   }
 
   const CurrentText = function(){
-    const transformOriginStyle = (textFormatSettings.align == 'flex-start')?'top left':((textFormatSettings.align == 'flex-end')?'top right':'center');
+    const transformOriginStyle = getTransformationAlignment(textFormatSettings);
     const textStyle = {
       textAlign:textFormatSettings.align,
       transform: `scale(${textFormatSettings.width},${textFormatSettings.height})`,
@@ -440,33 +427,33 @@ function App() {
       fontSize : textFormatSettings.font == 'A'?'34px':'24px',
     };
     return(
-        <div key = {`preview_text_current`} className = "receipt_text preview_item" style = {textStyle}>
+        <div key = {`preview_text_current`} className = "receipt_text current_preview" style = {textStyle}>
           {currentText}
         </div>);
   }
 
   const CurrentImage = function(){
-    const maxWidth = 576 * imageRenderSettings.scale;
-    const dims = {
-      width:currentlyRenderedImage.width*imageRenderSettings.scale,
-      height:currentlyRenderedImage.height*imageRenderSettings.scale,
-    };
-    const aspectRatio = dims.height/dims.width;
-    if (dims.width > maxWidth) {
-      dims.width = maxWidth;
-      dims.height = maxWidth*aspectRatio;
-    }
     const previewImageStyle = {
-      width:dims.width,
-      height:dims.height,
-      position:'relative',
+      position:'relative'
     };
     const urls = convertImageToDataURLs(currentlyRenderedImage,imageRenderSettings);
     return(<div className = 'image_holder' style = {{display:'flex',width:'fit-content',height:'fit-content',flexDirection:'column'}}>
       {urls.map((img,index) => {
-      return <img style = {{...previewImageStyle,height:img.height}} key = {`preview_image_current_${index}`} src = {img.url}></img>
+      return <img className = "current_preview" style = {{...previewImageStyle,width:img.width,height:img.height}} key = {`preview_image_current_${index}`} src = {img.url}></img>
       })}
     </div>);
+  }
+
+  function getTransformationAlignment(formatSettings){
+    switch(formatSettings.align){
+      case'flex-start':
+        return 'top left';
+      case 'flex-end':
+        return'top right';
+      case 'center':
+      default:
+        return '50% 0%';
+    }
   }
 
   return (
@@ -482,30 +469,28 @@ function App() {
               width:'100%',
               height:'fit-content',
               display:'flex',
-              // position:'relative',
               justifyContent:item.textFormatSettings.align,
-              // overflowX:'clip'
             };
+            const deleteButtonStyle = {
+              width:'20px',
+              height:'20px',
+              borderRadius:'10px',
+              color:'black',
+              backgroundColor:'red',
+              marginLeft:'4px',
+              fontFamily:'monospace',
+              fontSize:'20px',
+              display:'flex',
+              alignItems:'center',
+              justifyContent:'center',
+              cursor:'pointer',
+              fontWeight:'bold',
+              position:'absolute',
+            }
             if(item.type == 'text'){
-              const deleteButtonStyle = {
-                width:'20px',
-                height:'20px',
-                borderRadius:'10px',
-                color:'black',
-                backgroundColor:'red',
-                marginLeft:'4px',
-                fontFamily:'monospace',
-                fontSize:'20px',
-                display:'flex',
-                alignItems:'center',
-                justifyContent:'center',
-                cursor:'pointer',
-                fontWeight:'bold',
-                position:'absolute',
-                right:'-25px',
-                top:'0px'
-              }
-              const transformOriginStyle = (item.textFormatSettings.align == 'flex-start')?'top left':((item.textFormatSettings.align == 'flex-end')?'top right':'center');
+              deleteButtonStyle.right = '-25px';
+              deleteButtonStyle.top = '0px';
+              const transformOriginStyle = getTransformationAlignment(item.textFormatSettings);
               const textStyle = {
                 textAlign:item.textFormatSettings.align,
                 transform: `scale(${item.textFormatSettings.width},${item.textFormatSettings.height})`,
@@ -520,52 +505,27 @@ function App() {
               };
               return (
               <div key = {`preview_row_${index}`} className = 'preview_row' style = {previewRowStyle}>
-                <div key = {`preview_item_${index}`} className = "receipt_text preview_item" style = {textStyle}>
-                  {item.text}
+                <div style = {{width:'fit-content',position:'relative'}}>
+                  <div key = {`preview_item_${index}`} className = "receipt_text preview_item" style = {textStyle}>
+                    {item.text}
+                  </div>
                   <div key = {`preview_item_delete_button_${index}`} className = 'cancel_button' style = {deleteButtonStyle} onClick = {() => {removePreviewItem(index)}}>x</div>
                 </div>
               </div>);
             }
             else if(item.type == 'image'){
-              const deleteButtonStyle = {
-                width:'20px',
-                height:'20px',
-                borderRadius:'10px',
-                color:'black',
-                backgroundColor:'red',
-                marginLeft:'4px',
-                fontFamily:'monospace',
-                fontSize:'20px',
-                display:'flex',
-                alignItems:'center',
-                justifyContent:'center',
-                cursor:'pointer',
-                fontWeight:'bold',
-                position:'absolute',
-                right:'5px',
-                top:'5px'
-              }
-              const urls = item.urls;
-              const maxWidth = 576 * item.imageRenderSettings.scale;
-              const dims = {
-                width:item.image.width*item.imageRenderSettings.scale,
-                height:item.image.height*item.imageRenderSettings.scale,
-              };
-              const aspectRatio = dims.height/dims.width;
-              if (dims.width > maxWidth) {
-                dims.width = maxWidth;
-                dims.height = maxWidth*aspectRatio;
-              }
               const previewImageStyle = {
-                width:dims.width,
                 position:'relative',
               };
+              deleteButtonStyle.right = '5px';
+              deleteButtonStyle.top = '5px';
+              const urls = item.urls;
               //if it's an array of images (for a tall image)
               return(
                 <div key = {`preview_row_${index}`} className = 'preview_row' style = {previewRowStyle}>
                     <div className = 'image_holder preview_item' style = {{position:'relative',display:'flex',width:'fit-content',height:'fit-content',flexDirection:'column'}}>
                       {urls.map((im,index) => {
-                        return <img style = {{...previewImageStyle,height:im.height}} key = {`preview_image_${index}`} src = {im.url}></img>
+                        return <img style = {{...previewImageStyle,width:im.width,height:im.height}} key = {`preview_image_${index}`} src = {im.url}></img>
                       })}
                       <div key = {`preview_item_delete_button_${index}`} className = 'cancel_button' style = {deleteButtonStyle} onClick = {() => {removePreviewItem(index)}}>x</div>
                     </div>
@@ -592,165 +552,166 @@ function App() {
       <div id="title">esc-pos thermal printer fighter</div>
         <main id="p5canvas"></main>
         <div id="button_holder" className="button">
-          <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:connectedToPrinter?"#4dff00ff":"#004e11ff",color:connectedToPrinter?"#000000ff":"#ffffffff"}} onClick={() => receiptPrinterRef.current.connect()} value={connectedToPrinter?"connected!":"connect to printer"} />
+          <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:connectedToPrinter?"#4dff00ff":"#004e11ff",color:connectedToPrinter?"#000000ff":"#ffffffff",width:'100%'}} onClick={() => receiptPrinterRef.current.connect()} value={connectedToPrinter?"connected!":"connect to printer"} />
           {/*<div style = {{display:connectedToPrinter?'grid':'none'}}>*/}
-          <div>
-            <div style = {{display:'flex',alignItems:'center',flexDirection:'row'}}>
-              <p className = "control_header">{"*--- esc commands ---*"}</p>
-              <textarea style = {{marginLeft:'20px',padding:'none',width:'100px',height:'25px',color:'white',backgroundColor:'black',alignContent:'center'}} onInput={(e) => {customCommandText.current = e.target.value}}></textarea>
-              <input className = "control_button" style = {{width:'fit-content',height:'30px'}} type="button" onClick={() => sendCustomCommand()} value="send raw command" />
-            </div>
-            <div style = {{display:'flex'}}>
-              <input className = "control_button image_button" style = {{backgroundImage:'url(paper_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center'}} type="button" onClick={() => advancePaper()} value="advance paper" />
-              <input className = "control_button image_button" style = {{backgroundImage:'url(scissor_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center'}} type="button" onClick={() => cutPaper()} value="cut receipt" />
-              <input className = "control_button image_button" style = {{backgroundImage:'url(printer_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center', backgroundColor:"#ff0000ff",borderRadius:'10px'}} id="print_button" type="button" onClick={() => sendPreviewDataToPrinter()} value="send data to printer & print" />
-              <input className = "control_button image_button" style = {{backgroundImage:'url(cancel_icon.png)',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'center', backgroundColor:"#d4ff00ff",borderRadius:'10px'}} type="button" onClick={() => {clearImages();setCurrentText('');}} value="clear preview" />
-              {currentlyRenderedImage &&
-              <input className = "control_button" style = {{borderRadius:'10px'}}type="button" onClick={() => {
-                const link = document.createElement('a');
-                link.href = currentlyRenderedImageRef.current.canvas.toDataURL('image/png');
-                link.download = 'ditheredImage.png';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-              }} value="save" />
-              }
-            </div>
-            
-            <p className = "control_header">{"*--- text ---*"}</p>
-            {/* preview text */}
-            <textarea style ={{height:'fit-content'}} cols="48" onClick = {()=>setMostRecentlyEdited('text')} onKeyDown={(e) => {
-              if(e.key === 'Enter' && !e.shiftKey){
-                //load into receipt
-                receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptText(e.target.value,textFormatSettingsRef.current));
-                setReceiptCanvases([...receiptCanvasesRef.current]);
-                //make sure this doesn't add a newline to the textbox, too
-                e.stopPropagation();
-                e.preventDefault();
-                //clear preview text
-                setCurrentText('');
-              }
-            }} 
-            onInput = {(e) => {
-              setCurrentText(e.target.value);
-              setMostRecentlyEdited('text');
-            }}
-            value = {currentText}></textarea>
-            {/* save text to preview */}
-            {currentText &&
-              <input className = "control_button" type="button" onClick={() => {
-                receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptText(currentTextRef.current,textFormatSettingsRef.current));
-                setReceiptCanvases([...receiptCanvasesRef.current]);
-                setCurrentText('');
-              }} value="save text to receipt [ENTER]" />
-            }
-            <div style = {{display:'flex', alignItems:'center'}}>
-              {/* stacking the w,h sliders vertically */}
-              <div style = {{display:'flex',flexDirection:'column',marginBottom:'0px',paddingBottom:'0px'}}>
-                <div style = {{display:'flex',alignItems:'center'}}>
-                  <p>{"x: "}</p>
-                  <select name="horizontal stretch" className = "control_dropdown" onInput={(e) => setTextFormatSettings({...textFormatSettingsRef.current,width : parseFloat(e.target.value)})}>
-                    <option className = "control_dropdown" value="1.0">1x</option>
-                    <option className = "control_dropdown" value="2.0">2x</option>
-                    <option className = "control_dropdown" value="3.0">3x</option>
-                    <option className = "control_dropdown" value="4.0">4x</option>
-                    <option className = "control_dropdown" value="5.0">5x</option>
-                    <option className = "control_dropdown" value="6.0">6x</option>
-                    <option className = "control_dropdown" value="7.0">7x</option>
-                    <option className = "control_dropdown" value="8.0">8x</option>
-                  </select>
-                </div>
-                <div style = {{display:'flex',alignItems:'center'}}>
-                  <p>{"y: "}</p>
-                  <select name="vertical stretch" className = "control_dropdown" onInput={(e) => setTextFormatSettings({...textFormatSettingsRef.current,height : parseFloat(e.target.value)})}>
-                    <option className = "control_dropdown" value="1.0">1x</option>
-                    <option className = "control_dropdown" value="2.0">2x</option>
-                    <option className = "control_dropdown" value="3.0">3x</option>
-                    <option className = "control_dropdown" value="4.0">4x</option>
-                    <option className = "control_dropdown" value="5.0">5x</option>
-                    <option className = "control_dropdown" value="6.0">6x</option>
-                    <option className = "control_dropdown" value="7.0">7x</option>
-                    <option className = "control_dropdown" value="8.0">8x</option>
-                  </select>
-                </div>
-              </div>
-              {/* stacking the font,codepage sliders vertically */}
-              <div style = {{display:'flex',flexDirection:'column',marginBottom:'0px',paddingBottom:'0px'}}>
-                <div style = {{display:'flex',alignItems:'center'}}>
-                  <p>{"font: "}</p>
-                  <select name="font" className = "control_dropdown" onInput={(e) => setTextFormatSettings({...textFormatSettingsRef.current,font : e.target.value})}>
-                    <option className = "control_dropdown" value="A">12x24</option>
-                    <option className = "control_dropdown" value="B">9x17</option>
-                  </select>
-                </div>
-                <div style = {{display:'flex',alignItems:'center'}}>
-                  <p>{"codepage: "}</p>
-                  <select name="codepage" className = "control_dropdown" onInput={(e) => setTextFormatSettings({...textFormatSettingsRef.current,codepage : e.target.value})}>
-                    <option className = "control_dropdown" value="A">12x24</option>
-                    <option className = "control_dropdown" value="B">9x17</option>
-                  </select>
-                </div>
-              </div>
-              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.bold?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,bold:!textFormatSettingsRef.current.bold})}} value="bold" />
-              <input className = "control_button" style = {{borderRadius:'20px',fontStyle:'italic',backgroundColor:textFormatSettings.italic?'rgba(255, 255, 0, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,italic:!textFormatSettingsRef.current.italic})}} value="italic" />
-              <input className = "control_button" style = {{borderRadius:'20px',backgroundColor:textFormatSettings.invert?'black':'white',color:textFormatSettings.invert?'white':'black'}} id="print_button" type="button" onClick = {() => {setTextFormatSettings({...textFormatSettingsRef.current,invert:!textFormatSettingsRef.current.invert})}} value="invert" />
-            </div>
-            <p className = "control_header">{"*--- position ---*"}</p>
-            <div style = {{display:'flex',alignItems:'center'}}>
-              <p>{"align: "}</p>
-              <div id = "align_buttons" style = {{display:'flex'}}>
-                <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.align == 'flex-start'?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,align:'flex-start'})}} value="left" />
-                <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.align == 'center'?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,align:'center'})}} value="center" />
-                <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.align == 'flex-end'?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,align:'flex-end'})}} value="right" />
-              </div>
-              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.upsideDown?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,upsideDown:!textFormatSettingsRef.current.upsideDown})}} value="upside down" />
-              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.rotate90?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,rotate90:!textFormatSettingsRef.current.rotate90})}} value="rotate 90º" />
-            </div>
-            <p className = "control_header">{"*--- image ---*"}</p>
-            {currentImageDataURL &&
-            <>
-            <div style = {{display:'flex',width:'100%',justifyContent:'center',height:'fit-content',}}>
-              <img onClick = {()=>setMostRecentlyEdited('image')} className = "upload_image_preview" style = {{cursor:'pointer',maxWidth:'200px'}} src={currentImageDataURL}/>
-            </div>
-            {/* save image to preview */}
-            <input className = "control_button" type="button" onClick={() => {
-              receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptImage(currentlyRenderedImageRef.current,imageRenderSettingsRef.current,textFormatSettingsRef.current));
-              setReceiptCanvases([...receiptCanvasesRef.current]);
-              setCurrentlyRenderedImage(null);
-              setCurrentImageDataURL(null);
-            }} value="save image to receipt" />
-            <div style = {{display:'flex',alignItems:'center'}}>
-              <p>{"dither algorithm: "}</p>
-              <select name="dither type" className = "control_dropdown" onInput={(e) => {setMostRecentlyEdited('image');setImageRenderSettings({...imageRenderSettingsRef.current,algorithm: e.target.value})}}>
-                <option className = "control_dropdown" value="atkinson">atkinson</option>
-                <option className = "control_dropdown" value="floyd">floyd</option>
-                <option className = "control_dropdown" value="bayer">bayer</option>
-                <option className = "control_dropdown" value="threshold">threshold</option>
-              </select>
-              <p>{"size: "}</p>
-              <select name="dither type" className = "control_dropdown" onInput={(e) => {setMostRecentlyEdited('image');setImageRenderSettings({...imageRenderSettingsRef.current,scale : parseFloat(e.target.value)})}}>
-                <option className = "control_dropdown" value="1.0">100%</option>
-                <option className = "control_dropdown" value="0.75">75%</option>
-                <option className = "control_dropdown" value="0.5">50%</option>
-                <option className = "control_dropdown" value="0.25">25%</option>
-              </select>
-            </div>
-            {imageRenderSettings.algorithm != 'bayer' &&
-            <div style = {{display:'flex'}}>
-              <p>{'Threshold:'}</p>
-              <input type="range" className = "control_slider" id="dither_threshold_slider" name="threshold" min="0" max="4.0" step="0.01" onInput={(e) => {setMostRecentlyEdited('image');setImageRenderSettings({...imageRenderSettingsRef.current,threshold: 1.0 - parseFloat(e.target.value)})}} />
-              <p>{Math.round((imageRenderSettings.threshold + Number.EPSILON) * 100) / 100}</p>
-            </div>
-            }
-            </>
-            }
-            <label id="drop-zone">
-              Drop images here, or click to upload.
-              <input type="file" id="file-input" multiple accept="image/*" onInput={(e) => uploadImage(e.target.files[0])} />
-            </label>
+          <p className = "control_header">{"*-------------------------- esc commands --------------------------*"}</p>
+          <div style = {{display:'flex',alignItems:'center',flexDirection:'row'}}>
+            <textarea style = {{marginLeft:'20px',padding:'none',width:'100px',height:'25px',color:'white',backgroundColor:'black',alignContent:'center'}} onInput={(e) => {customCommandText.current = e.target.value}}></textarea>
+            <input className = "control_button" style = {{width:'fit-content',height:'30px'}} type="button" onClick={() => sendCustomCommand()} value="send raw command" />
           </div>
+          <p className = "control_header">{"*------------------------ printer control ------------------------*"}</p>
+          <div style = {{display:'flex'}}>
+            <input className = "control_button" type="button" onClick={() => advancePaper()} value="advance paper" />
+            <input className = "control_button" type="button" onClick={() => cutPaper()} value="✂" />
+            <input className = "control_button" id="print_button" type="button" onClick={() => sendPreviewDataToPrinter()} value="⌘P" />
+            <input className = "control_button" type="button" onClick={() => {clear();}} value="X" />
+            {currentlyRenderedImage &&
+            <input className = "control_button" style = {{borderRadius:'10px'}}type="button" onClick={() => {
+              const link = document.createElement('a');
+              link.href = currentlyRenderedImageRef.current.canvas.toDataURL('image/png');
+              link.download = 'ditheredImage.png';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }} value="⌘S" />
+            }
+          </div>
+          
+          <p className = "control_header">{"*------------------------------ text ------------------------------*"}</p>
+          {/* preview text */}
+          <div style = {{width:'100%',display:'flex',justifyContent:'center'}}>
+          <textarea style ={{height:'fit-content'}}  onClick = {()=>setMostRecentlyEdited('text')} onKeyDown={(e) => {
+            if(e.key === 'Enter' && !e.shiftKey){
+              //load into receipt
+              receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptText(e.target.value,textFormatSettingsRef.current));
+              setReceiptCanvases([...receiptCanvasesRef.current]);
+              //make sure this doesn't add a newline to the textbox, too
+              e.stopPropagation();
+              e.preventDefault();
+              //clear preview text
+              setCurrentText('');
+            }
+          }} 
+          onInput = {(e) => {
+            setCurrentText(e.target.value);
+            setMostRecentlyEdited('text');
+          }}
+          value = {currentText}></textarea>
+          {/* save text to preview */}
+          {currentText &&
+            <input className = "control_button" type="button" onClick={() => {
+              receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptText(currentTextRef.current,textFormatSettingsRef.current));
+              setReceiptCanvases([...receiptCanvasesRef.current]);
+              setCurrentText('');
+            }} value="save to receipt [ENTER]" />
+          }
+          </div>
+          <div style = {{display:'flex', alignItems:'center'}}>
+            {/* stacking the w,h sliders vertically */}
+            <div style = {{display:'flex',flexDirection:'column',marginBottom:'0px',paddingBottom:'0px'}}>
+              <div style = {{display:'flex',alignItems:'center',position:'relative',width:'fit-content'}}>
+                <p>{"x: "}</p>
+                <input style = {{width:'50px'}} type="range" className = "control_slider" id="horizontal_stretch_slider" name="horizontal_stretch" min="1.0" max="8.0" defaultValue = '1.0' step="1.0" 
+                onInput={(e) => {
+                  setMostRecentlyEdited('text');
+                  setTextFormatSettings({...textFormatSettingsRef.current,width:parseFloat(e.target.value)})}} />
+                <p style = {{position:'absolute',top:'-1em',left:'25px'}}>{'x'+textFormatSettings.width}</p>
+              </div>
+              <div style = {{display:'flex',alignItems:'center',position:'relative',width:'fit-content'}}>
+                <p>{"y: "}</p>
+                <input style = {{width:'50px'}} type="range" className = "control_slider" id="vertical_stretch_slider" name="vertical_stretch" min="1.0" max="8.0" defaultValue = '1.0' step="1.0" 
+                onInput={(e) => {
+                  setMostRecentlyEdited('text');
+                  setTextFormatSettings({...textFormatSettingsRef.current,height:parseFloat(e.target.value)})}} />
+                <p style = {{position:'absolute',top:'-1em',left:'25px'}}>{'x'+textFormatSettings.height}</p>
+              </div>
+            </div>
+            {/* stacking the font,codepage sliders vertically */}
+            <div style = {{display:'flex',flexDirection:'column',marginBottom:'0px',paddingBottom:'0px'}}>
+              <div style = {{display:'flex',alignItems:'center'}}>
+                <p>{"font: "}</p>
+                <select name="font" className = "control_dropdown" onInput={(e) => setTextFormatSettings({...textFormatSettingsRef.current,font : e.target.value})}>
+                  <option className = "control_dropdown" value="A">12x24</option>
+                  <option className = "control_dropdown" value="B">9x17</option>
+                </select>
+              </div>
+              <div style = {{display:'flex',alignItems:'center'}}>
+                <p>{"codepage: "}</p>
+                <select name="codepage" className = "control_dropdown" onInput={(e) => setTextFormatSettings({...textFormatSettingsRef.current,codepage : e.target.value})}>
+                  <option className = "control_dropdown" value="A">12x24</option>
+                  <option className = "control_dropdown" value="B">9x17</option>
+                </select>
+              </div>
+            </div>
+            <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.bold?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,bold:!textFormatSettingsRef.current.bold})}} value="bold" />
+            <input className = "control_button" style = {{borderRadius:'20px',fontStyle:'italic',backgroundColor:textFormatSettings.italic?'rgba(255, 255, 0, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,italic:!textFormatSettingsRef.current.italic})}} value="italic" />
+            <input className = "control_button" style = {{borderRadius:'20px',backgroundColor:textFormatSettings.invert?'black':'white',color:textFormatSettings.invert?'white':'black'}} id="print_button" type="button" onClick = {() => {setTextFormatSettings({...textFormatSettingsRef.current,invert:!textFormatSettingsRef.current.invert})}} value="invert" />
+          </div>
+          <p className = "control_header">{"*----------------------------- image -----------------------------*"}</p>
+          {currentImageDataURL &&
+          <>
+          {/* save image to preview */}
+          <input className = "control_button" type="button" onClick={() => {
+            receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptImage(currentlyRenderedImageRef.current,imageRenderSettingsRef.current,textFormatSettingsRef.current));
+            setReceiptCanvases([...receiptCanvasesRef.current]);
+            setCurrentlyRenderedImage(null);
+            setCurrentImageDataURL(null);
+          }} value="save image to receipt" />
+          <div style = {{display:'flex',width:'100%',margin:'20px',justifyContent:'center',height:'fit-content',}}>
+            <img onClick = {()=>setMostRecentlyEdited('image')} className = "upload_image_preview" style = {{cursor:'pointer',maxWidth:'200px'}} src={currentImageDataURL}/>
+          </div>
+          <input className = "control_button" type="button" style = {{backgroundColor:imageRenderSettings.scaleToFillReceipt?'blue':null,color:imageRenderSettings.scaleToFillReceipt?'white':null}} onClick={() => {
+              setMostRecentlyEdited('image');
+              setImageRenderSettings({...imageRenderSettingsRef.current,scaleToFillReceipt : !imageRenderSettingsRef.current.scaleToFillReceipt});
+          }} value="scale 2 fill"/>
+          <div style = {{display:'flex',alignItems:'center'}}>
+            <p>{"dither algorithm: "}</p>
+            <select name="dither type" className = "control_dropdown" onInput={(e) => {setMostRecentlyEdited('image');setImageRenderSettings({...imageRenderSettingsRef.current,algorithm: e.target.value})}}>
+              <option className = "control_dropdown" value="atkinson">atkinson</option>
+              <option className = "control_dropdown" value="floyd">floyd</option>
+              <option className = "control_dropdown" value="bayer">bayer</option>
+              <option className = "control_dropdown" value="threshold">threshold</option>
+            </select>
+            <div style = {{position:'relative',display:'flex',cursor:imageRenderSettings.scaleToFillReceipt?'not-allowed':null,pointerEvents:imageRenderSettings.scaleToFillReceipt?'none':null,borderColor:imageRenderSettings.scaleToFillReceipt?'#8d8d8dff':null,color:imageRenderSettings.scaleToFillReceipt?'#8d8d8dff':null}}>
+            <p>{"Scale: "}</p>
+            <input type="range" className = "control_slider" id="image_scale_slider" name="scale" min="0.01" max="1.0" defaultValue = "1.0" step="0.01" 
+            onInput={(e) => {
+                setMostRecentlyEdited('image');
+                setImageRenderSettings({...imageRenderSettingsRef.current,scale: parseFloat(e.target.value)});
+              }} />
+            <p style = {{position:'absolute',right:`-${imageRenderSettings.scale.toString().length+1}ch`}}>{imageRenderSettings.scale}</p>
+          </div>
+          </div>
+          {imageRenderSettings.algorithm != 'bayer' &&
+          <div style = {{display:'flex',position:'relative'}}>
+            <p>{'Brightness:'}</p>
+            <input type="range" className = "control_slider" id="dither_threshold_slider" name="threshold" min="0.01" max="4.0" defaultValue = '0.5' step="0.01" 
+            onInput={(e) => {
+              setMostRecentlyEdited('image');
+              setImageRenderSettings({...imageRenderSettingsRef.current,threshold:parseFloat(e.target.value)})}} />
+            <p style = {{position:'absolute',right:`-${imageRenderSettings.threshold.toString().length+1}ch`}}>{imageRenderSettings.threshold}</p>
+          </div>
+          }
+          </>
+          }
+          <label id="drop-zone">
+            Drop images here, or click to upload.
+            <input type="file" id="file-input" multiple accept="image/*" onInput={(e) => uploadImage(e.target.files[0])} />
+          </label>
+          <p className = "control_header">{"*---------------------------- position ----------------------------*"}</p>
+          <div style = {{display:'flex',alignItems:'center'}}>
+            <p>{"align: "}</p>
+            <div id = "align_buttons" style = {{display:'flex'}}>
+              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.align == 'flex-start'?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,align:'flex-start'})}} value="left" />
+              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.align == 'center'?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,align:'center'})}} value="center" />
+              <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.align == 'flex-end'?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,align:'flex-end'})}} value="right" />
+            </div>
+            <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.upsideDown?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,upsideDown:!textFormatSettingsRef.current.upsideDown})}} value="upside down" />
+            <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.rotate90?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,rotate90:!textFormatSettingsRef.current.rotate90})}} value="rotate 90º" />
+          </div>
+          <p className = "control_header">{"*------------------------------------------------------------------*"}</p>
         </div>
-    </div>
+      </div>
   )
 }
 
