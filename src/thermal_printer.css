@@ -168,7 +168,7 @@ select:hover{
     flex-direction: column;
     align-items: flex-start;
     white-space: pre;
-    background-image: url('wrinkled_paper.jpg');
+    background-image: url('/wrinkled_paper.jpg');
     background-size:cover;
     background-repeat: repeat-y;
     /* white-space-collapse: preserve-breaks; */
