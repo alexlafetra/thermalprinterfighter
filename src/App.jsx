@@ -423,7 +423,7 @@ function App() {
       img.pixels[p] = newPixels[p / 4];
       img.pixels[p + 1] = newPixels[p / 4];
       img.pixels[p + 2] = newPixels[p / 4];
-      img.pixels[p + 3] = 255;
+      img.pixels[p + 3] = newPixels[p / 4]?0:255;
     }
     img.updatePixels();
   }

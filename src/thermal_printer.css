@@ -151,13 +151,13 @@ select:hover{
 /* flex container */
 #receipt{
     display:flex;
-    background-color: rgb(255, 255, 255);
+    /* background-color: rgb(255, 255, 255); */
     width:576px;
     font-size:34px;
     min-height:80%;
     height:fit-content;
     border:none;
-    box-shadow: 10px 5px 20px rgb(40, 48, 0);;
+    box-shadow: 10px 5px 20px rgb(40, 48, 0);
     margin:none;
     margin-top:100px;
     padding:20px;
@@ -168,6 +168,9 @@ select:hover{
     flex-direction: column;
     align-items: flex-start;
     white-space: pre;
+    background-image: url('wrinkled_paper.jpg');
+    background-size:cover;
+    background-repeat: repeat-y;
     /* white-space-collapse: preserve-breaks; */
     color:rgb(56, 56, 56);
 }
