@@ -162,7 +162,7 @@ function App() {
                 const newCanv = ReceiptCanvas();
                 newCanv.items = [
                   ReceiptText('*/---------------------------------------\\*',{...textFormatSettings,align:'center'}),
-                  ReceiptText('~** THERMAL PRINTER FIGHER **~',{...textFormatSettings,align:'center',invert:true}),
+                  ReceiptText('~** THERMAL PRINTER FIGHTER **~',{...textFormatSettings,align:'center',invert:true}),
                   ReceiptText('*\\---------------------------------------/*',{...textFormatSettings,align:'center'}),
                   ReceiptImage(img,{...imageRenderSettings,scale:0.5},{...textFormatSettings,align:'center'}),
                   ReceiptText('website to help you draw text & images with\nesc-pos thermal printers',{...textFormatSettings,align:'center'}),
