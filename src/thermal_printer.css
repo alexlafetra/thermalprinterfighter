@@ -134,7 +134,7 @@ select:hover{
 .upload_image_preview:hover{
     border:1px solid blue;
 }
-#preview_holder{
+#receipt_holder{
     position:fixed;
     left:500px;
     height:80vh;
@@ -146,9 +146,10 @@ select:hover{
     margin:none;
     padding:none;
     padding-bottom:500px;
+    padding-left:20px;
 }
 /* flex container */
-#preview{
+#receipt{
     display:flex;
     background-color: rgb(255, 255, 255);
     width:576px;
@@ -156,20 +157,22 @@ select:hover{
     min-height:80%;
     height:fit-content;
     border:none;
-    box-shadow: 10px 5px 10px rgb(40, 48, 0);;
+    box-shadow: 10px 5px 20px rgb(40, 48, 0);;
     margin:none;
-    margin-top:10%;
-    padding:none;
+    margin-top:100px;
+    padding:20px;
     border-radius: 1px;
     font-family:receipt;
-    overflow:visible;
+    overflow-y:scroll;
+    overflow-x:hidden;
     flex-direction: column;
     align-items: flex-start;
-    white-space-collapse: preserve-breaks;
+    white-space: pre;
+    /* white-space-collapse: preserve-breaks; */
     color:rgb(56, 56, 56);
 }
 
-#preview img{
+#receipt img{
     flex: 0 0 auto; /* do not grow or shrink */
     width: auto;    /* ensures no forced scaling */
     height: auto;   /* keeps original height */

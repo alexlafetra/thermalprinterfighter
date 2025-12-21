@@ -11,6 +11,8 @@ function App() {
   const printerSTLRef = useRef();
   //WebUSB instance
   const receiptPrinterRef = useRef();
+  const [printerInfo,setPrinterInfo] = useState(null);
+
   //Receipt encoder instance
   const encoderRef = useRef();
   //Image selected by user
@@ -32,7 +34,8 @@ function App() {
     connectedToPrinterRef.current = connectedToPrinter;
   }, [connectedToPrinter]);
 
-  const [currentText,setCurrentText] = useState('hello printer');
+  // const [currentText,setCurrentText] = useState('hello printer');
+  const [currentText,setCurrentText] = useState('');
   const currentTextRef = useRef(currentText);
   useEffect(() => {
     currentTextRef.current = currentText;
@@ -51,7 +54,7 @@ function App() {
   }, [imageRenderSettings]);
 
   const [textFormatSettings,setTextFormatSettings] = useState({
-    align : 'flex-start',//right, left, center
+    align : 'flex-start',//flex-start, center, flex-end
     underline : false,
     bold: false,
     italic: false,
@@ -149,6 +152,26 @@ function App() {
     p5Ref.current = p;
     p.setup = async () => {
       printerSTLRef.current = await p.loadModel("thermal_printer.stl");
+      fetch("printer.jpeg").then(
+        response => {
+          response.blob().then(
+            blob => {
+              console.log()
+              const blobURL = URL.createObjectURL(blob);
+              p.loadImage(blobURL, (img) => {
+                const newCanv = ReceiptCanvas();
+                newCanv.items = [
+                  ReceiptText('*/---------------------------------------\\*',{...textFormatSettings,align:'center'}),
+                  ReceiptText('~** THERMAL PRINTER FIGHER **~',{...textFormatSettings,align:'center',invert:true}),
+                  ReceiptText('*\\---------------------------------------/*',{...textFormatSettings,align:'center'}),
+                  ReceiptImage(img,{...imageRenderSettings,scale:0.5},{...textFormatSettings,align:'center'}),
+                  ReceiptText('website to help you draw text & images with\nesc-pos thermal printers',{...textFormatSettings,align:'center'}),
+                ]
+                setReceiptCanvases([newCanv]);
+              })
+              // uploadImage(new File([blob], 'printer.jpeg', { type: blob.type }));
+            });
+        });
       p.createCanvas(350, 240, p.WEBGL);
       // p.createCanvas(350, 540, p.WEBGL);
       p.angleMode(p.DEGREES);
@@ -186,6 +209,15 @@ function App() {
       // language:  printerLanguage,
       // codepageMapping: printerCodepageMapping
     });
+
+    setPrinterInfo(device);
+    //type == usb
+    //vendorID
+    //productID
+    //manufacturerName
+    //serialNumber
+    //language
+    //codepageMapping
 
     //adding custom esc-pos methods!
     encoderRef.current.rotate90 = function(state){
@@ -403,25 +435,35 @@ function App() {
     setReceiptCanvases([...receiptCanvasesRef.current]);
   }
 
+  function saveCanvasToJSON(){
+
+  }
+
   function removePreviewItem(index){
     const receipt = receiptCanvasesRef.current[currentCanvasRef.current];
     receipt.items = receipt.items.filter((item,i) => {return (i !== index)});
     setReceiptCanvases([...receiptCanvasesRef.current]);
   }
 
-  const CurrentText = function(){
-    const transformOriginStyle = getTransformationAlignment(textFormatSettings);
-    const textStyle = {
-      textAlign:textFormatSettings.align,
-      transform: `scale(${textFormatSettings.width},${textFormatSettings.height})`,
+  function getTextStyle(formatSettings){
+    const transformOriginStyle = getTransformationAlignment(formatSettings);
+    return {
+      textAlign:formatSettings.align,
+      transform: `scale(${formatSettings.width},${formatSettings.height})`,
       transformOrigin:transformOriginStyle,
-      color:textFormatSettings.invert?'white':'black',
-      backgroundColor:textFormatSettings.invert?'black':'transparent',
+      color:formatSettings.invert?'white':'black',
+      backgroundColor:formatSettings.invert?'black':'transparent',
       width:'fit-content',
-      fontStyle : textFormatSettings.italic?'italic':'normal',
-      fontWeight : textFormatSettings.bold?'bold':'normal',
-      fontSize : textFormatSettings.font == 'A'?'34px':'24px',
+      fontStyle : formatSettings.italic?'italic':'normal',
+      fontWeight : formatSettings.bold?'bold':'normal',
+      fontSize : formatSettings.font == 'A'?'34px':'24px',
+      textDecoration:formatSettings.underline?'underline':null,
     };
+  }
+
+  const CurrentText = function(){
+    const textStyle = getTextStyle(textFormatSettings);
+    // textStyle.color = '#686868ff';
     return(
         <div key = {`preview_text_current`} className = "receipt_text current_preview" style = {textStyle}>
           {currentText}
@@ -430,7 +472,7 @@ function App() {
 
   const CurrentImage = function(){
     const previewImageStyle = {
-      position:'relative'
+      position:'relative',
     };
     const urls = convertImageToDataURLs(currentlyRenderedImage,imageRenderSettings);
     return(<div className = 'image_holder' style = {{display:'flex',width:'fit-content',height:'fit-content',flexDirection:'column'}}>
@@ -457,8 +499,20 @@ function App() {
     <div id="gui">
       <div id="title">esc-pos thermal printer fighter</div>
         <main id="p5canvas"></main>
+        {printerInfo &&
+          <div id = "printer_info">
+            <p>{`language: ${printerInfo.language}`}</p>
+            <p>{`manufacturer: ${printerInfo.manufacturerName}`}</p>
+            <p>{`code page: ${printerInfo.codepageMapping}`}</p>
+            <p>{`serial number: ${printerInfo.serialNumber}`}</p>
+          </div>
+        }
         <div id="button_holder" className="button">
           <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:connectedToPrinter?"#4dff00ff":"#004e11ff",color:connectedToPrinter?"#000000ff":"#ffffffff",width:'100%'}} onClick={() => receiptPrinterRef.current.connect()} value={connectedToPrinter?"connected!":"connect to printer"} />
+          <div style = {{display:'flex'}}>
+            <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'red',color:'white'}} onClick={clear} value={"clear canvas"} />
+            <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'#ff9fecff',color:'black'}} onClick={saveCanvasToJSON} value={"save JSON"} />
+          </div>
           {connectedToPrinter &&
           <p className = "control_header">{"*------------------------ printer control ------------------------*"}</p>
           }
@@ -469,7 +523,6 @@ function App() {
             <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => advancePaper()} value="advance paper" />
             <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => cutPaper()} value="✂" />
             <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" id="print_button" type="button" onClick={() => sendPreviewDataToPrinter()} value="⌘P" />
-            <input style = {{color:receiptCanvases[currentCanvas].items.length?null:'#8d8d8dff',borderColor:receiptCanvases[currentCanvas].items.length?null:'#8d8d8dff',pointerEvents:receiptCanvases[currentCanvas].items.length?null:'none'}} className = "control_button" type="button" onClick={() => {clear();}} value="X" />
             {currentlyRenderedImage &&
             <input className = "control_button" style = {{borderRadius:'10px'}}type="button" onClick={() => {
               const link = document.createElement('a');
@@ -558,6 +611,7 @@ function App() {
             </div>
             <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.bold?'rgba(0, 162, 255, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,bold:!textFormatSettingsRef.current.bold})}} value="bold" />
             <input className = "control_button" style = {{borderRadius:'20px',fontStyle:'italic',backgroundColor:textFormatSettings.italic?'rgba(255, 255, 0, 1)':null}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,italic:!textFormatSettingsRef.current.italic})}} value="italic" />
+            <input className = "control_button" style = {{borderRadius:'20px',fontWeight:'bolder',backgroundColor:textFormatSettings.underline?'rgba(0, 162, 255, 1)':null,textDecoration:'underline'}} type="button" onClick={() => {setTextFormatSettings({...textFormatSettingsRef.current,underline:!textFormatSettingsRef.current.underline})}} value="underline" />
             <input className = "control_button" style = {{borderRadius:'20px',backgroundColor:textFormatSettings.invert?'black':'white',color:textFormatSettings.invert?'white':'black'}} id="print_button" type="button" onClick = {() => {setTextFormatSettings({...textFormatSettingsRef.current,invert:!textFormatSettingsRef.current.invert})}} value="invert" />
           </div>
           <p style = {{animation:mostRecentlyEdited=='image'?'blink_background 0.8s infinite':null}} className = "control_header">{"*----------------------------- image -----------------------------*"}</p>
@@ -616,8 +670,8 @@ function App() {
           </div>
           <p className = "control_header">{"*------------------------------------------------------------------*"}</p>
         </div>
-        <div id="preview_holder">
-        <div id="preview">
+        <div id="receipt_holder">
+        <div id="receipt">
           {receiptCanvases[currentCanvas].items.map((item,index) => {
             const previewRowStyle = {
               width:'100%',
@@ -644,19 +698,7 @@ function App() {
             if(item.type == 'text'){
               deleteButtonStyle.right = '-25px';
               deleteButtonStyle.top = '0px';
-              const transformOriginStyle = getTransformationAlignment(item.textFormatSettings);
-              const textStyle = {
-                textAlign:item.textFormatSettings.align,
-                transform: `scale(${item.textFormatSettings.width},${item.textFormatSettings.height})`,
-                transformOrigin:transformOriginStyle,
-                color:item.textFormatSettings.invert?'white':'black',
-                backgroundColor:item.textFormatSettings.invert?'black':'transparent',
-                width:'fit-content',
-                fontStyle : item.textFormatSettings.italic?'italic':'normal',
-                fontWeight : item.textFormatSettings.bold?'bold':'normal',
-                fontSize : item.textFormatSettings.font == 'A'?'34px':'24px',
-                position:'relative',
-              };
+              const textStyle = getTextStyle(item.textFormatSettings);
               return (
               <div key = {`preview_row_${index}`} className = 'preview_row' style = {previewRowStyle}>
                 <div style = {{width:'fit-content',position:'relative'}}>
