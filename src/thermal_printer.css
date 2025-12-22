@@ -25,10 +25,10 @@ input{
 }
 #gui{
     display:grid;
-    grid-template-areas:"title title title"
-                        "title title title"
+    grid-template-areas:"title title info"
+                        "title title blank2"
                         "blank1 buttons blank2";
-    grid-template-columns: 50px 390px 80px;
+    grid-template-columns: 50px 280px 220px;
     grid-template-rows: 10px 220px auto;
     width:fit-content;
     height:fit-content;
@@ -41,7 +41,7 @@ input{
     color:white;
     mix-blend-mode:difference;
     grid-area:title;
-    position:absolute;
+    position:relative;
     width:100px;
     padding-top:30px;
     padding-left:60px;
@@ -185,21 +185,30 @@ select:hover{
     filter:brightness(0.7);
 } */
 
-.preview_row .cancel_button{
+.preview_row .preview_item_button_holder{
     visibility:hidden;
 }
-.preview_row:hover .cancel_button{
+.preview_item_button_holder:hover,
+.preview_row:hover .preview_item_button_holder{
+    visibility:visible;
+}
+.cancel_button:hover{
     visibility:visible;
 }
 .preview_item{
     outline:1px solid transparent;
+    cursor:pointer;
+    transition:0.1s;
 }
 .preview_row:hover .preview_item{
-    outline:1px solid blue;
+    outline:1px solid #a1b4ff;
+    background-color: #d3dcff;
     cursor:pointer;
 }
 .current_preview{
+    cursor:pointer;
     outline:4px dashed blue;
+    background-color: #e4ffd3;
     animation:blink_border;
     animation-duration: 0.5s;
     animation-iteration-count: infinite;
