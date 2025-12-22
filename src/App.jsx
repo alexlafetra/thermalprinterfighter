@@ -614,8 +614,8 @@ function App() {
         <div id="button_holder" className="button">
           <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:connectedToPrinter?"#4dff00ff":"#004e11ff",color:connectedToPrinter?"#000000ff":"#ffffffff",width:'100%'}} onClick={() => receiptPrinterRef.current.connect()} value={connectedToPrinter?"connected!":"connect to printer"} />
           <div style = {{display:'flex'}}>
-            <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'red',color:'white'}} onClick={clear} value={"clear canvas"} />
-            <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'#ff9fecff',color:'black'}} onClick={saveCanvasToJSON} value={"save JSON"} />
+            <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'red',color:'white'}} onClick={clear} value={"X"} />
+            <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'#ffffff',borderStyle:'dashed',color:'black'}} onClick={saveCanvasToJSON} value={"save JSON"} />
           </div>
           {connectedToPrinter &&
           <p className = "control_header">{"*------------------------ printer control ------------------------*"}</p>
