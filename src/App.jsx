@@ -288,6 +288,7 @@ function App() {
       encoderRef.current.bold(item.textFormatSettings.bold);
       encoderRef.current.codepage(item.textFormatSettings.codepage);
       encoderRef.current.italic(item.textFormatSettings.italic);
+
       //custom esc-pos methods!
       encoderRef.current.raw([27,123,item.textFormatSettings.upsideDown?1:0]);
       encoderRef.current.raw([0x1B,0x56,item.textFormatSettings.rotate90?1:0]);
@@ -310,6 +311,9 @@ function App() {
         // for(const line of lines){
         //   encoderRef.current.text((line).slice(0,encoderRef.current.columns));
         // }
+      }
+      else if(item.type === 'cut'){
+        encoderRef.current.cut('full');
       }
       //print!
       receiptPrinterRef.current.print(encoderRef.current.encode());
@@ -396,6 +400,13 @@ function App() {
       newImg.copy(img, 0, 0, img.width, img.height, 0, 0, img.width, img.height);
       img = newImg.get();
     }
+    //if width isn't a multiple of 8, make a new image that is
+    if (img.width % 8) {
+      let newImg = p5Ref.current.createImage(img.width + (8 - img.width % 8), img.height);
+      newImg.copy(img, 0, 0, img.width, img.height, 0, 0, img.width, img.height);
+      img = newImg.get();
+    }
+
     //dither image in place
     ditherImage(img,renderSettings);
 
@@ -452,7 +463,35 @@ function App() {
   }
 
   function saveCanvasToJSON(){
+    const receipt = receiptCanvasesRef.current[currentCanvasRef.current];
+    const list = [];
+    receipt.items.map((item,index)=>{
+      if(item.type == 'image'){
+        //skip p5 image objects
+        list.push({...item,image:null});
+      }
+      else{
+        list.push({...item});
+      }
+    })
+    const jsonString = JSON.stringify(list, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
 
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "receipt.json";
+    a.click();
+
+    URL.revokeObjectURL(url);
+
+    a.remove();
+  }
+
+  function loadCanvasFromJSON(file){
+    console.log(file);
+    const loadedItems = JSON.parse(jsonString);
+    console.log(loadedItems);
   }
 
   function removePreviewItem(index){
@@ -497,6 +536,7 @@ function App() {
       color:formatSettings.invert?'white':'black',
       backgroundColor:formatSettings.invert?'black':null,
       width:'fit-content',
+      marginBottom:`${formatSettings.height-1}em`,
       fontStyle : formatSettings.italic?'italic':'normal',
       fontWeight : formatSettings.bold?'bold':'normal',
       fontSize : formatSettings.font == 'A'?'34px':'24px',
@@ -615,7 +655,8 @@ function App() {
           <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:connectedToPrinter?"#4dff00ff":"#004e11ff",color:connectedToPrinter?"#000000ff":"#ffffffff",width:'100%'}} onClick={() => receiptPrinterRef.current.connect()} value={connectedToPrinter?"connected!":"connect to printer"} />
           <div style = {{display:'flex'}}>
             <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'red',color:'white'}} onClick={clear} value={"X"} />
-            <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'#ffffff',borderStyle:'dashed',color:'black'}} onClick={saveCanvasToJSON} value={"save JSON"} />
+            <input className = "control_button" type="button" style = {{borderStyle:'dashed'}} onClick={saveCanvasToJSON} value={"save JSON"} />
+            <input className = "control_button" type="button" style = {{borderStyle:'dashed'}} onClick={loadCanvasFromJSON} value={"load JSON"} />
           </div>
           {connectedToPrinter &&
           <p className = "control_header">{"*------------------------ printer control ------------------------*"}</p>
@@ -626,6 +667,11 @@ function App() {
           <div style = {{display:'flex'}}>
             <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => advancePaper()} value="advance paper" />
             <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => cutPaper()} value="✂" />
+            <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => {
+              //load into receipt
+              receiptCanvasesRef.current[currentCanvasRef.current].items.push({type:'cut',textFormatSettings:{...textFormatSettingsRef.current}});
+              setReceiptCanvases([...receiptCanvasesRef.current]);
+            }} value="add ✂" />
             <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" id="print_button" type="button" onClick={() => printReceipt()} value="⌘P" />
             {currentlyRenderedImage &&
             <input className = "control_button" style = {{borderRadius:'10px'}}type="button" onClick={() => {
@@ -864,6 +910,25 @@ function App() {
                   </div>
                 </div>
               );
+            }
+            else if(item.type == 'cut'){
+              const cutPreviewStyle = {
+                color:'red',
+                textAlign:'center'
+              }
+              return (
+              <div key = {`preview_row_${index}`} className = 'preview_row' style = {previewRowStyle}>
+                <div style = {{width:'fit-content',position:'relative'}}>
+                  <div key = {`preview_item_${index}`} className = {`receipt_text ${index == itemCurrentlyEditing?'current_preview':'preview_item'}`} style = {cutPreviewStyle} onClick = {(e)=>{if(index == itemCurrentlyEditingRef.current)return;e.stopPropagation();setItemCurrentlyEditing(index);if(itemCurrentlyEditingRef.current != -1)commitEdit();loadItemForEditing(index);}}>
+                    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                  </div>
+                </div>
+                <div style = {buttonHolderStyle} className = 'preview_item_button_holder'>
+                  <div key = {`preview_item_delete_button_${index}`} className = 'cancel_button' style = {deleteButtonStyle} onClick = {(e) => {e.stopPropagation();e.preventDefault();removePreviewItem(index)}}>x</div>
+                  <div className = "cancel_button" style = {{cursor:'pointer',border:'1px solid',borderRadius:'6px',fontSize:'12px',backgroundColor:"white",color:"black",width:'20px',textAlign:'center'}} onClick={(e) => {e.stopPropagation();swapPreviewItems(index,index-1)}}>{'▲'}</div>
+                  <div className = "cancel_button" style = {{cursor:'pointer',border:'1px solid',borderRadius:'6px',fontSize:'12px',backgroundColor:"white",color:"black",width:'20px',textAlign:'center'}} onClick={(e) => {e.stopPropagation();swapPreviewItems(index,index+1)}}>{'▼'}</div>
+                </div>
+              </div>);
             }
           })}
           {itemCurrentlyEditing == -1 &&
