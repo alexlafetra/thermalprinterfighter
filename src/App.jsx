@@ -78,6 +78,7 @@ function App() {
     return ({
       type:'image',
       image:image,//p5 image
+      originalImageURL:image.canvas.toDataURL(),
       imageData:convertImageToDataURLs(image,imageSettings),//converted image
       imageRenderSettings:{...imageSettings},
       textFormatSettings:{...textSettings}
@@ -315,6 +316,9 @@ function App() {
       else if(item.type === 'cut'){
         encoderRef.current.cut('full');
       }
+      else if(item.type === 'newline'){
+        encoderRef.current.newline();
+      }
       //print!
       receiptPrinterRef.current.print(encoderRef.current.encode());
     }
@@ -489,9 +493,33 @@ function App() {
   }
 
   function loadCanvasFromJSON(file){
-    console.log(file);
-    const loadedItems = JSON.parse(jsonString);
-    console.log(loadedItems);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+
+      //parse in the file text
+      const loadedItems = JSON.parse(reader.result);
+
+      //create a new object for each entry
+      const newItemsArray = [];
+      for(let item of loadedItems){
+        if(item.type == 'image'){
+          await p5Ref.current.loadImage(item.originalImageURL?item.originalImageURL:item.imageData[0].url,(img)=>{
+            newItemsArray.push(ReceiptImage(img,item.imageRenderSettings,item.textFormatSettings));
+          });
+        
+        }
+        else{
+          newItemsArray.push({
+            ...item,
+          })
+        }
+      }
+
+      setReceiptCanvases([{items:[...newItemsArray]}]);
+      setCurrentCanvas(0);
+      setItemCurrentlyEditing(-1);
+    }
+    reader.readAsText(file);
   }
 
   function removePreviewItem(index){
@@ -656,7 +684,10 @@ function App() {
           <div style = {{display:'flex'}}>
             <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'red',color:'white'}} onClick={clear} value={"X"} />
             <input className = "control_button" type="button" style = {{borderStyle:'dashed'}} onClick={saveCanvasToJSON} value={"save JSON"} />
-            <input className = "control_button" type="button" style = {{borderStyle:'dashed'}} onClick={loadCanvasFromJSON} value={"load JSON"} />
+            <label className = "control_button" style = {{borderStyle:'dashed'}} id = "JSON-file-input">
+              load JSON
+              <input type="file" accept="application/json" style = {{display:'none'}} onInput={(e) => loadCanvasFromJSON(e.target.files[0])}/>
+            </label>
           </div>
           {connectedToPrinter &&
           <p className = "control_header">{"*------------------------ printer control ------------------------*"}</p>
@@ -704,8 +735,13 @@ function App() {
               e.stopPropagation();
               e.preventDefault();
               if(itemCurrentlyEditingRef.current == -1){
+                if(e.target.value === ''){
+                  receiptCanvasesRef.current[currentCanvasRef.current].items.push({type:'newline',textFormatSettings:textFormatSettingsRef.current});
+                }
+                else{
+                  receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptText(e.target.value,textFormatSettingsRef.current));
+                }
                 //load into receipt
-                receiptCanvasesRef.current[currentCanvasRef.current].items.push(ReceiptText(e.target.value === ''?'\n':e.target.value,textFormatSettingsRef.current));
                 setReceiptCanvases([...receiptCanvasesRef.current]);
                 //clear preview text
                 setCurrentText('');
@@ -833,12 +869,25 @@ function App() {
             <input type="file" id="file-input" multiple accept="image/*" onInput={(e) => uploadImage(e.target.files[0])} />
           </label>
           </>}
-          <p className = "control_header">{"*-------------------------- esc commands --------------------------*"}</p>
-          <div style = {{display:'flex',alignItems:'center',flexDirection:'row'}}>
-            <textarea style = {{marginLeft:'20px',padding:'none',width:'100px',height:'25px',color:'white',backgroundColor:'black',alignContent:'center'}} onInput={(e) => {customCommandText.current = e.target.value}}></textarea>
-            <input className = "control_button" style = {{width:'fit-content',height:'30px'}} type="button" onClick={() => sendCustomCommand()} value="send raw command" />
+          <p className = "control_header">{"*----------------------------- special ----------------------------*"}</p>
+          <div style ={{display:'flex'}}>
+            <input className = "control_button" type="button" onClick={() => {
+                //load into receipt
+                receiptCanvasesRef.current[currentCanvasRef.current].items.push({type:'cut',textFormatSettings:{...textFormatSettingsRef.current}});
+                setReceiptCanvases([...receiptCanvasesRef.current]);
+              }} value="cut" />
+              <input className = "control_button" type="button" onClick={() => {
+                //load into receipt
+                receiptCanvasesRef.current[currentCanvasRef.current].items.push({type:'newline',textFormatSettings:{...textFormatSettingsRef.current}});
+                setReceiptCanvases([...receiptCanvasesRef.current]);
+              }} value="newline" />
           </div>
-          <p className = "control_header">{"*------------------------------------------------------------------*"}</p>
+        <p className = "control_header">{"*-------------------------- esc commands --------------------------*"}</p>
+        <div style = {{display:'flex',alignItems:'center',flexDirection:'row'}}>
+          <textarea style = {{marginLeft:'20px',padding:'none',width:'100px',height:'25px',color:'white',backgroundColor:'black',alignContent:'center'}} onInput={(e) => {customCommandText.current = e.target.value}}></textarea>
+          <input className = "control_button" style = {{width:'fit-content',height:'30px'}} type="button" onClick={() => sendCustomCommand()} value="send raw command" />
+        </div>
+        <p className = "control_header">{"*------------------------------------------------------------------*"}</p>
         </div>
         <div id="receipt_holder">
         <div id="receipt" onClick = {()=>{if(-1 == itemCurrentlyEditingRef.current)return;setItemCurrentlyEditing(-1);if(itemCurrentlyEditingRef.current != -1)commitEdit();}}>
@@ -920,7 +969,26 @@ function App() {
               <div key = {`preview_row_${index}`} className = 'preview_row' style = {previewRowStyle}>
                 <div style = {{width:'fit-content',position:'relative'}}>
                   <div key = {`preview_item_${index}`} className = {`receipt_text ${index == itemCurrentlyEditing?'current_preview':'preview_item'}`} style = {cutPreviewStyle} onClick = {(e)=>{if(index == itemCurrentlyEditingRef.current)return;e.stopPropagation();setItemCurrentlyEditing(index);if(itemCurrentlyEditingRef.current != -1)commitEdit();loadItemForEditing(index);}}>
-                    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    -----------------------------------------------
+                  </div>
+                </div>
+                <div style = {buttonHolderStyle} className = 'preview_item_button_holder'>
+                  <div key = {`preview_item_delete_button_${index}`} className = 'item_button' style = {deleteButtonStyle} onClick = {(e) => {e.stopPropagation();e.preventDefault();removePreviewItem(index)}}>x</div>
+                  <div className = "move_button" onClick={(e) => {e.stopPropagation();swapPreviewItems(index,index-1)}}>{'▲'}</div>
+                  <div className = "move_button" onClick={(e) => {e.stopPropagation();swapPreviewItems(index,index+1)}}>{'▼'}</div>
+                </div>
+              </div>);
+            }
+            else if(item.type == 'newline'){
+              const newlinePreviewStyle = {
+                color:'#4dff4aff'
+              }
+
+              return (
+              <div key = {`preview_row_${index}`} className = 'preview_row' style = {previewRowStyle}>
+                <div style = {{width:'fit-content',position:'relative'}}>
+                  <div key = {`preview_item_${index}`} className = {`receipt_text ${index == itemCurrentlyEditing?'current_preview':'preview_item'}`} style = {newlinePreviewStyle} onClick = {(e)=>{if(index == itemCurrentlyEditingRef.current)return;e.stopPropagation();setItemCurrentlyEditing(index);if(itemCurrentlyEditingRef.current != -1)commitEdit();loadItemForEditing(index);}}>
+                    \n                                           \n
                   </div>
                 </div>
                 <div style = {buttonHolderStyle} className = 'preview_item_button_holder'>
