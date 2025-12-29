@@ -682,9 +682,9 @@ function App() {
         <div id="button_holder" className="button">
           <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:connectedToPrinter?"#4dff00ff":"#004e11ff",color:connectedToPrinter?"#000000ff":"#ffffffff",width:'100%'}} onClick={() => receiptPrinterRef.current.connect()} value={connectedToPrinter?"connected!":"connect to printer"} />
           <div style = {{display:'flex'}}>
-            <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'red',color:'white'}} onClick={clear} value={"X"} />
-            <input className = "control_button" type="button" style = {{borderStyle:'dashed'}} onClick={saveCanvasToJSON} value={"save JSON"} />
-            <label className = "control_button" style = {{borderStyle:'dashed'}} id = "JSON-file-input">
+            <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'red',color:'white'}} onClick={clear} value={"Xx Clear xX"} />
+            <input id = "save-JSON-button" type="button" style = {{borderStyle:'dashed'}} onClick={saveCanvasToJSON} value={"save JSON"} />
+            <label id = "load-JSON-button" style = {{borderStyle:'dashed'}}>
               load JSON
               <input type="file" accept="application/json" style = {{display:'none'}} onInput={(e) => loadCanvasFromJSON(e.target.files[0])}/>
             </label>
@@ -693,17 +693,12 @@ function App() {
           <p className = "control_header">{"*------------------------ printer control ------------------------*"}</p>
           }
           {!connectedToPrinter &&
-          <p className = "control_header">*---------------- printer control <span style = {{color:'red'}}>{'[not connected]'}</span> ----------------*</p>
+          <p className = "control_header">*---------------- printer control <span style = {{color:'red'}}>{'[printer not connected]'}</span> ----------------*</p>
           }
           <div style = {{display:'flex'}}>
             <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => advancePaper()} value="advance paper" />
-            <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => cutPaper()} value="✂" />
-            <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => {
-              //load into receipt
-              receiptCanvasesRef.current[currentCanvasRef.current].items.push({type:'cut',textFormatSettings:{...textFormatSettingsRef.current}});
-              setReceiptCanvases([...receiptCanvasesRef.current]);
-            }} value="add ✂" />
-            <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" id="print_button" type="button" onClick={() => printReceipt()} value="⌘P" />
+            <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => cutPaper()} value="✂ cut ✂" />
+            <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" id="print_button" type="button" onClick={() => printReceipt()} value="⌘Print" />
             {currentlyRenderedImage &&
             <input className = "control_button" style = {{borderRadius:'10px'}}type="button" onClick={() => {
               const link = document.createElement('a');

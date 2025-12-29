@@ -83,6 +83,45 @@ input{
 .control_button:hover{
     background-color:blue;
     color:white;
+
+}
+#save-JSON-button{
+    padding:6px;
+    font-weight:bold;
+    font-size:20px;
+    /* min-width:50px; */
+    /* height:50px; */
+    border-radius:10px;
+    border:black 1px solid;
+    margin:2px;
+    cursor:pointer;
+    transition:0.1s;
+    background-color:rgb(134, 255, 91);
+    color:black;
+    border-color:#0a9200;
+}
+#save-JSON-button:hover{
+    background-color:blue;
+    color:white;
+}
+#load-JSON-button{
+    padding:6px;
+    font-weight:bold;
+    font-size:20px;
+    /* min-width:50px; */
+    /* height:50px; */
+    border-radius:10px;
+    border:black 1px solid;
+    margin:2px;
+    cursor:pointer;
+    transition:0.1s;
+    background-color:rgb(91, 195, 255);
+    color:black;
+    border-color:#2c0092;
+}
+#load-JSON-button:hover{
+    background-color:blue;
+    color:white;
 }
 .image_button{
     color:transparent;
