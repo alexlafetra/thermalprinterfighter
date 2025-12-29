@@ -216,8 +216,10 @@ select:hover{
     align-items: flex-start;
     white-space: pre;
     background-image: url('/wrinkled_paper.jpg');
-    background-size:cover;
+    /* background-size:cover; */
+    background-size: 100%;
     background-repeat: repeat-y;
+    /* background-size: contain; */
     /* white-space-collapse: preserve-breaks; */
     color:rgb(56, 56, 56);
 }

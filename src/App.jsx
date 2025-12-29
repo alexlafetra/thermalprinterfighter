@@ -14,6 +14,8 @@ function App() {
   const [printerInfo,setPrinterInfo] = useState(null);
   //Receipt encoder instance
   const encoderRef = useRef();
+  const printCallbackRef = useRef(null);
+  const stopPrinting = useRef(false);
 
   //Image selected by user
   const [currentlyRenderedImage,setCurrentlyRenderedImage] = useState(null);
@@ -130,7 +132,13 @@ function App() {
     receiptPrinterRef.current = new WebUSBReceiptPrinter();
     receiptPrinterRef.current.addEventListener('connected', connect);
     encoderRef.current = new ReceiptPrinterEncoder();
-
+    window.addEventListener("keydown", (e) => {
+      if(e.key === 'p' && e.metaKey){
+        e.preventDefault();
+        e.stopPropagation();
+        printReceipt();
+      }
+    });
     const dropZone = document.getElementById("drop-zone");
     window.addEventListener("drop", (e) => {
       if ([...e.dataTransfer.items].some((item) => item.kind === "file")) {
@@ -188,7 +196,6 @@ function App() {
                 ]
                 setReceiptCanvases([newCanv]);
               })
-              // uploadImage(new File([blob], 'printer.jpeg', { type: blob.type }));
             });
         });
       p.createCanvas(350, 240, p.WEBGL);
@@ -203,9 +210,8 @@ function App() {
       p.pixelDensity((1.0 + Math.sin(p.frameCount/20))/2.0);
       p.translate(0, 80, 0);
       p.rotateX(80);
-      // p.rotateZ(140);
       p.rotateZ(p.frameCount * 10);
-      p.background(0, 0, 0, 0);
+      // p.background(0, 0, 0, 0);
       p.scale(3);
       p.normalMaterial();
       p.model(printerSTLRef.current);
@@ -281,7 +287,24 @@ function App() {
       setMostRecentlyEdited('image');
     });
   }
-
+  function cancelPrint(){
+    //clear the printReceipt() callback
+    clearTimeout(printCallbackRef.current);
+    //reset callback reference (not super necessary)
+    printCallbackRef.current = null;
+    //reset print settings 
+    setPrintSettings({...printSettingsRef.current,printing:false,numberPrintedSoFar:0});
+  }
+  function pausePrint(){
+    //clear the printReceipt() callback
+    clearTimeout(printCallbackRef.current);
+    printCallbackRef.current = null;
+    setPrintSettings({...printSettingsRef.current,paused:true});
+  }
+  function resumePrint(){
+    setPrintSettings({...printSettingsRef.current,paused:false});
+    printCallbackRef.current = setTimeout(printReceipt,printSettingsRef.current.delay);
+  }
   function printReceipt() {
     //if not connected, prompt user to connect
     if (!connectedToPrinterRef.current)
@@ -333,12 +356,14 @@ function App() {
       //print!
       receiptPrinterRef.current.print(encoderRef.current.encode());
     }
-    if(printSettingsRef.current.numberPrintedSoFar < printSettingsRef.current.copies-1){
-      setPrintSettings({...printSettingsRef.current,printing:true,numberPrintedSoFar:printSettingsRef.current.numberPrintedSoFar+1});
-      setTimeout(printReceipt,printSettingsRef.current.delay);
+    //trigger next print
+    if((printSettingsRef.current.numberPrintedSoFar < printSettingsRef.current.copies-1) && stopPrinting.current == false){
+      setPrintSettings({...printSettingsRef.current,paused:false,printing:true,numberPrintedSoFar:printSettingsRef.current.numberPrintedSoFar+1});
+      printCallbackRef.current = setTimeout(printReceipt,printSettingsRef.current.delay);
     }
+    //stop printing
     else{
-      setPrintSettings({...printSettingsRef.current,printing:false,numberPrintedSoFar:0});
+      setPrintSettings({...printSettingsRef.current,paused:false,printing:false,numberPrintedSoFar:0});
     }
   }
 
@@ -683,12 +708,7 @@ function App() {
   }
 
   return (
-    <div id = "gui_container" onKeyDown = {(e) => {
-      if(e.key === 'p' && e.metaKey){
-        e.preventDefault();
-        printReceipt();
-      }
-    }}>
+    <div id = "gui_container">
     <div id="gui">
       <div id="title">esc-pos thermal printer fighter</div>
         {printerInfo &&
@@ -726,7 +746,18 @@ function App() {
             <span>{`${printSettings.delay}ms`}</span>
           </div>
           {printSettings.printing &&
+          <>
             <p className = "control_header"style = {{color:'red'}}>{`printing ${printSettings.numberPrintedSoFar}/${printSettings.copies}...`}</p>
+            <input id="cancel-print-button" className = "control_button" type="button" style = {{backgroundColor:'red',color:'white'}} onClick={cancelPrint} value={"Xx Cancel Print xX"} />
+            {
+              !printSettings.paused &&
+              <input id="pause-print-button" className = "control_button" type="button" style = {{backgroundColor:'blue',color:'white'}} onClick={pausePrint} value={"Pause"} />
+            }
+            {
+              printSettings.paused &&
+              <input id="continue-print-button" className = "control_button" type="button" style = {{backgroundColor:'#00f2ffff',color:'black'}} onClick={resumePrint} value={"Continue"} />
+            }
+          </>
           }
 
           {connectedToPrinter &&
