@@ -123,6 +123,14 @@ input{
     background-color:blue;
     color:white;
 }
+#print-button{
+    background-color: rgb(255, 128, 0);
+    color:white;
+}
+#print-button:hover{
+    background-color:blue;
+    color:white;
+}
 .image_button{
     color:transparent;
 }

@@ -72,6 +72,17 @@ function App() {
     textFormatSettingsRef.current = textFormatSettings;
   }, [textFormatSettings]);
 
+  const [printSettings,setPrintSettings] = useState({
+    delay:200,
+    copies:1,
+    numberPrintedSoFar:0,
+    printing:false,
+  });
+  const printSettingsRef = useRef(printSettings);
+  useEffect(() => {
+    printSettingsRef.current = printSettings;
+  }, [printSettings]);
+
   const [mostRecentlyEdited,setMostRecentlyEdited] = useState('text');
 
   const ReceiptImage = function(image,imageSettings,textSettings){
@@ -181,7 +192,7 @@ function App() {
             });
         });
       p.createCanvas(350, 240, p.WEBGL);
-      // p.createCanvas(350, 540, p.WEBGL);
+      // p.createCanvas(350, 280, p.WEBGL);
       p.angleMode(p.DEGREES);
       p.ortho();
       // p.pixelDensity(1);
@@ -321,6 +332,13 @@ function App() {
       }
       //print!
       receiptPrinterRef.current.print(encoderRef.current.encode());
+    }
+    if(printSettingsRef.current.numberPrintedSoFar < printSettingsRef.current.copies-1){
+      setPrintSettings({...printSettingsRef.current,printing:true,numberPrintedSoFar:printSettingsRef.current.numberPrintedSoFar+1});
+      setTimeout(printReceipt,printSettingsRef.current.delay);
+    }
+    else{
+      setPrintSettings({...printSettingsRef.current,printing:false,numberPrintedSoFar:0});
     }
   }
 
@@ -657,7 +675,7 @@ function App() {
   function getInputControlStyle(type){
     if(type == 'text'){
       const isActive = (itemCurrentlyEditing == -1)||(receiptCanvases[currentCanvas].items[itemCurrentlyEditing].type == type);
-      return{height:'fit-content',pointerEvents:isActive?null:'none',borderColor:isActive?null:'#8d8d8dff',color:isActive?null:'#8d8d8dff'}
+      return{padding:'4px',borderRadius:'10px',resize:'none',height:'5em',width:'20ch',pointerEvents:isActive?null:'none',borderColor:isActive?null:'#8d8d8dff',color:isActive?null:'#8d8d8dff'}
     }
     else if(type == 'image'){
       const isActive = (itemCurrentlyEditing == -1)||(receiptCanvases[currentCanvas].items[itemCurrentlyEditing].type == type);
@@ -665,7 +683,12 @@ function App() {
   }
 
   return (
-    <div id = "gui_container">
+    <div id = "gui_container" onKeyDown = {(e) => {
+      if(e.key === 'p' && e.metaKey){
+        e.preventDefault();
+        printReceipt();
+      }
+    }}>
     <div id="gui">
       <div id="title">esc-pos thermal printer fighter</div>
         {printerInfo &&
@@ -682,13 +705,30 @@ function App() {
         <div id="button_holder" className="button">
           <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:connectedToPrinter?"#4dff00ff":"#004e11ff",color:connectedToPrinter?"#000000ff":"#ffffffff",width:'100%'}} onClick={() => receiptPrinterRef.current.connect()} value={connectedToPrinter?"connected!":"connect to printer"} />
           <div style = {{display:'flex'}}>
-            <input id="connect_button" className = "control_button" type="button" style = {{backgroundColor:'red',color:'white'}} onClick={clear} value={"Xx Clear xX"} />
+            <input id="clear_button" className = "control_button" type="button" style = {{backgroundColor:'red',color:'white'}} onClick={clear} value={"Xx Clear Receipt xX"} />
             <input id = "save-JSON-button" type="button" style = {{borderStyle:'dashed'}} onClick={saveCanvasToJSON} value={"save JSON"} />
-            <label id = "load-JSON-button" style = {{borderStyle:'dashed'}}>
+            <label id = "load-JSON-button" style = {{display:'flex',borderStyle:'dashed',alignItems:'center'}}>
               load JSON
               <input type="file" accept="application/json" style = {{display:'none'}} onInput={(e) => loadCanvasFromJSON(e.target.files[0])}/>
             </label>
           </div>
+          <div id = "print-button-container" style = {{gap:'5px',marginTop:'10px',cursor:connectedToPrinter?'pointer':'not-allowed',display:'flex',alignItems:'center'}}>
+            <input id = "print-button" style = {{color:connectedToPrinter?null:'#8d8d8dff',backgroundColor:connectedToPrinter?null:'#dededeff',borderColor:connectedToPrinter?null:'#8d8d8dff',fontSize:'30px',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => printReceipt()} value="Print" />
+            <span style = {{fontSize:'30px'}}>X</span>
+            <input type = "number" max = "100" min = "1" style = {{color:connectedToPrinter?null:'#8d8d8dff',border:'1px dashed blue',borderRadius:'10px',pointerEvents:connectedToPrinter?null:'none',width:'fit-content',fontSize:'30px',height:'1em'}} value = {printSettings.copies} onInput = {
+              (e) => {
+                setPrintSettings({...printSettingsRef.current,copies:Math.min(Math.max(parseInt(e.target.value),1),100)});
+              }
+            }></input>
+            <span style = {{marginLeft:'10px'}}>delay: </span>
+            <input style = {{width:'100px',pointerEvents:connectedToPrinter?null:'none',cursor:'pointer'}} type="range" className = "control_slider" id="print_delay_slider" name="print_delay" min="1" max="2000" defaultValue = '200' step="1" 
+              onInput={(e) => {setPrintSettings({...printSettingsRef.current,delay:parseInt(e.target.value)})}}/>
+            <span>{`${printSettings.delay}ms`}</span>
+          </div>
+          {printSettings.printing &&
+            <p className = "control_header"style = {{color:'red'}}>{`printing ${printSettings.numberPrintedSoFar}/${printSettings.copies}...`}</p>
+          }
+
           {connectedToPrinter &&
           <p className = "control_header">{"*------------------------ printer control ------------------------*"}</p>
           }
@@ -698,7 +738,6 @@ function App() {
           <div style = {{display:'flex'}}>
             <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => advancePaper()} value="advance paper" />
             <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" type="button" onClick={() => cutPaper()} value="✂ cut ✂" />
-            <input style = {{color:connectedToPrinter?null:'#8d8d8dff',borderColor:connectedToPrinter?null:'#8d8d8dff',pointerEvents:connectedToPrinter?null:'none'}} className = "control_button" id="print_button" type="button" onClick={() => printReceipt()} value="⌘Print" />
             {currentlyRenderedImage &&
             <input className = "control_button" style = {{borderRadius:'10px'}}type="button" onClick={() => {
               const link = document.createElement('a');
